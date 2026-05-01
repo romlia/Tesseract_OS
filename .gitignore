@@ -1,5 +1,5 @@
 /target/
 /weights/
 *.log
-scratch/
+/scratch/
 clippy_output.txt
