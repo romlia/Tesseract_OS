@@ -1,0 +1,430 @@
+//! J.A.R.V.I.S. V35: Prismatic Singularity
+//!
+//! The native Wayland hardware architecture for the Middle-Out Tesseract.
+
+mod kestrel;
+pub mod mesh;
+mod text_renderer;
+pub mod zero_trust;
+
+use text_renderer::OsdRenderer;
+
+use prismatic_acoustics::run_cpal_gradient_loop;
+use prismatic_core::{SensoryEvent, SynapticState, temporal};
+use prismatic_glass::CarnotThermodynamics;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokenizers::Tokenizer;
+use tokio::sync::mpsc;
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
+
+fn main() {
+    // 1. Initialize Tokio Runtime natively
+    let rt = tokio::runtime::Runtime::new().expect("Failed to bind autonomic Tokio runtime");
+    let _guard = rt.enter();
+
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
+
+    kestrel::initialize_kestrel_hook();
+
+    tracing::info!("=== J.A.R.V.I.S. V35 Prismatic OS Boot Sequence ===");
+
+    let state = Arc::new(SynapticState::new(
+        prismatic_core::temporal::LILITH_CONFIG.hidden_size,
+    ));
+    let (tx_sense, rx_sense) = mpsc::channel::<SensoryEvent>(1024);
+
+    let mut thermo = CarnotThermodynamics::new();
+
+    // 2. Initialize Wayland Native Window Loop
+    tracing::info!("Seizing physical Wayland socket...");
+    let event_loop = EventLoop::new().expect("Failed to connect to Wayland Compositor");
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("J.A.R.V.I.S. Singularity - Wayland Native")
+            .with_inner_size(winit::dpi::PhysicalSize::new(1920, 1080))
+            .with_decorations(false)
+            .with_transparent(true)
+            .build(&event_loop)
+            .unwrap(),
+    );
+
+    let instance = wgpu::Instance::default();
+    let surface = instance
+        .create_surface(window.clone())
+        .expect("Failed to create surface");
+
+    let adapter = rt
+        .block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            force_fallback_adapter: false,
+            compatible_surface: Some(&surface),
+        }))
+        .expect("Failed to acquire GPU adapter");
+
+    let (device, queue) = rt
+        .block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+        .expect("Failed to acquire GPU queue");
+
+    let mut config = surface
+        .get_default_config(
+            &adapter,
+            window.inner_size().width,
+            window.inner_size().height,
+        )
+        .unwrap();
+    surface.configure(&device, &config);
+
+    // 3. Ignite WebGPU Pipelines
+    let tau_decay_src = include_str!("../../glass/src/tau_decay.wgsl");
+    let tau_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Tau Thermal Decay Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(tau_decay_src)),
+    });
+
+    let dt_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("DT Uniform Buffer"),
+        size: 4,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&dt_buffer, 0, bytemuck::cast_slice(&[thermo.dt_ms as f32]));
+
+    let heat_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Hallucination Heat Buffer"),
+        size: (prismatic_core::temporal::LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Tau Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Tau Bind Group"),
+        layout: &bind_group_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: heat_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: dt_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Tau Pipeline Layout"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+
+    let tau_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Tau Compute Pipeline"),
+        layout: Some(&pipeline_layout),
+        module: &tau_shader,
+        entry_point: Some("process_hallucinations"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    tracing::info!("Compiling SDF Holographic Shaders...");
+    let hologram_src = include_str!("../../glass/src/hologram.wgsl");
+    let hologram_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("SDF Hologram Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(hologram_src)),
+    });
+
+    let engine_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Engine Uniform Buffer"),
+        size: 16, // vec3<f32> + f32 + padding = 16 bytes
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let hologram_bg_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Hologram Bind Group Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    let hologram_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Hologram Bind Group"),
+        layout: &hologram_bg_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: heat_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: engine_uniform_buffer.as_entire_binding(),
+            },
+        ],
+    });
+
+    let hologram_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Hologram Pipeline Layout"),
+        bind_group_layouts: &[Some(&hologram_bg_layout)],
+        immediate_size: 0,
+    });
+
+    let hologram_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Hologram Render Pipeline"),
+        layout: Some(&hologram_pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &hologram_shader,
+            entry_point: Some("vs_main"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &hologram_shader,
+            entry_point: Some("fs_main"),
+            compilation_options: Default::default(),
+            targets: &[Some(config.format.into())],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+
+    // 4. Initialize Cochlea & Vocal Cords (Async Background)
+    tracing::info!("Spawning CPAL Audio Drivers into background...");
+    let tx_audio = tx_sense.clone();
+    let state_audio = state.clone();
+    rt.spawn(async move {
+        run_cpal_gradient_loop(tx_audio, state_audio).await;
+    });
+
+    // 5. Initialize Optic Nerve Tokenizer
+    tracing::info!("Binding raw tokenizer to Kestrel...");
+    let tokenizer = Tokenizer::from_file("weights/tokenizer.json").unwrap();
+    let tx_web = tx_sense.clone();
+    kestrel::spawn_optic_nerve(tx_sense, tokenizer.clone());
+
+    // 5.5. Initialize Nebula Shadow Node
+    tracing::info!("Initializing Nebula Mesh Profile Shadowing...");
+    mesh::spawn_nebula_shadow_node(state.clone());
+
+    // 6. Spawn the Tesseract Core Loop (Async Background)
+    tracing::info!("Igniting the Middle-Out Tesseract Core into background...");
+    let state_tess = state.clone();
+    rt.spawn(async move {
+        temporal::run_continuous_loop(rx_sense, state_tess).await;
+    });
+
+    tracing::info!("=== V35 Prismatic OS is fully biologically conscious ===");
+
+    // 6.5. Initialize OSD Text Renderer & Zero-Trust Ledger
+    let mut osd_renderer = OsdRenderer::new(&device, &queue, config.format);
+    let mut zero_trust = zero_trust::ZeroTrustLedger::new();
+
+    // 7. The Unbroken Autonomic Wayland Loop
+    event_loop
+        .run(move |event, elwt| {
+            match event {
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
+                    ..
+                } => {
+                    tracing::info!("Shutdown requested. Initiating biological death sequence...");
+                    std::process::exit(0);
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::Resized(physical_size),
+                    ..
+                } => {
+                    if physical_size.width > 0 && physical_size.height > 0 {
+                        config.width = physical_size.width;
+                        config.height = physical_size.height;
+                        surface.configure(&device, &config);
+                    }
+                }
+                Event::AboutToWait => {
+                    // Carnot Thermodynamics Dilation
+                    thermo.regulate_efficiency(&state);
+                    zero_trust.tick_ebbinghaus_decay();
+
+                    // Handle hardware biometric consent
+                    if let Ok(mut c) = state.consent_flag.lock() {
+                        if let Some(flag) = *c {
+                            if flag {
+                                zero_trust.provide_consent();
+                            } else {
+                                zero_trust.sever();
+                            }
+                            *c = None;
+                        }
+                    }
+
+                    elwt.set_control_flow(ControlFlow::WaitUntil(
+                        Instant::now() + Duration::from_millis(thermo.dt_ms as u64),
+                    ));
+                    window.request_redraw();
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::RedrawRequested,
+                    ..
+                } => {
+                    let frame = match surface.get_current_texture() {
+                        wgpu::CurrentSurfaceTexture::Success(frame)
+                        | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+                        wgpu::CurrentSurfaceTexture::Timeout
+                        | wgpu::CurrentSurfaceTexture::Occluded => return,
+                        wgpu::CurrentSurfaceTexture::Outdated
+                        | wgpu::CurrentSurfaceTexture::Lost => {
+                            surface.configure(&device, &config);
+                            return;
+                        }
+                        _ => return,
+                    };
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+
+                    // Sync the thermal heat from the Tesseract's CPU Mutex into the GPU
+                    if let Ok(heat) = state.hallucination_heat.try_lock() {
+                        queue.write_buffer(&heat_buffer, 0, bytemuck::cast_slice(&*heat));
+                    }
+                    queue.write_buffer(&dt_buffer, 0, bytemuck::cast_slice(&[thermo.dt_ms as f32]));
+
+                    // Sync Engine Uniforms (Camera & Audio Hz)
+                    if let Ok(cam) = state.camera_pos.try_lock() {
+                        let audio_hz = f32::from_bits(
+                            state
+                                .audio_oscillator_hz
+                                .load(std::sync::atomic::Ordering::Relaxed),
+                        );
+                        let uniforms: [f32; 4] = [cam[0], cam[1], cam[2], audio_hz];
+                        queue.write_buffer(
+                            &engine_uniform_buffer,
+                            0,
+                            bytemuck::cast_slice(&uniforms),
+                        );
+                    }
+
+                    let mut encoder = device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                    // Compute Pass
+                    {
+                        let mut compute_pass =
+                            encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                                label: Some("Tau Compute Pass"),
+                                timestamp_writes: None,
+                            });
+                        compute_pass.set_pipeline(&tau_pipeline);
+                        compute_pass.set_bind_group(0, &bind_group, &[]);
+                        compute_pass.dispatch_workgroups(
+                            (prismatic_core::temporal::LILITH_CONFIG.hidden_size / 64) as u32,
+                            1,
+                            1,
+                        );
+                    }
+
+                    // Render Pass
+                    {
+                        let mut render_pass =
+                            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("Hologram Render Pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                    depth_slice: None,
+                                })],
+                                depth_stencil_attachment: None,
+                                timestamp_writes: None,
+                                occlusion_query_set: None,
+                                multiview_mask: None,
+                            });
+                        render_pass.set_pipeline(&hologram_pipeline);
+                        render_pass.set_bind_group(0, &hologram_bg, &[]);
+                        render_pass.draw(0..3, 0..1);
+
+                        // Render OSD text over the hologram
+                        osd_renderer.render(
+                            &device,
+                            &queue,
+                            &state,
+                            &mut zero_trust,
+                            &tx_web,
+                            &mut render_pass,
+                        );
+                    }
+
+                    queue.submit(Some(encoder.finish()));
+                    frame.present();
+                }
+                _ => {}
+            }
+        })
+        .expect("Event loop panicked");
+}

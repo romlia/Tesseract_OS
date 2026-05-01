@@ -1,0 +1,5 @@
+/target/
+/weights/
+*.log
+scratch/
+clippy_output.txt

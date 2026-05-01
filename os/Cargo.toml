@@ -1,0 +1,31 @@
+[package]
+name = "prismatic-os"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+prismatic-core = { path = "../core" }
+prismatic-acoustics = { path = "../acoustics" }
+prismatic-glass = { path = "../glass" }
+
+wgpu.workspace = true
+rust_drm.workspace = true
+gbm.workspace = true
+raw-window-handle.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokenizers.workspace = true
+bytemuck.workspace = true
+rand.workspace = true
+uinput.workspace = true
+ctrlc.workspace = true
+io-uring.workspace = true
+reqwest.workspace = true
+libc = "0.2"
+v4l = "0.14.0"
+rayon.workspace = true
+crossbeam.workspace = true
+pollster.workspace = true
+memmap2 = "0.9.4"
+drm = "0.11"

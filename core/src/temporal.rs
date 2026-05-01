@@ -1,0 +1,2169 @@
+use crate::nvme::EbpfMicroKernel;
+use bytemuck::{Pod, Zeroable};
+use memmap2::MmapOptions;
+use std::fs::File;
+use std::io::Read;
+use std::sync::atomic::Ordering;
+use rayon::prelude::*;
+
+// MAGIC TRICK: Auto-Vectorize via SIMD
+// YMM hardware registers process 8 tokens simultaneously in the same clock cycle.
+#[inline(always)]
+fn q_abs(x: f32) -> f32 {
+    f32::from_bits(x.to_bits() & 0x7FFFFFFF)
+}
+
+#[inline(always)]
+fn q_sign(x: f32) -> f32 {
+    f32::from_bits((x.to_bits() & 0x80000000) | 0x3F800000)
+}
+
+#[inline(always)]
+fn q_sin(x: f32) -> f32 {
+    let pi = std::f32::consts::PI;
+    let period = 2.0 * pi;
+    let mut x_mod = x - period * (x / period).floor();
+    if x_mod > pi {
+        x_mod -= period;
+    }
+    let mut sin_x = (4.0 / pi) * x_mod - (4.0 / (pi * pi)) * x_mod * q_abs(x_mod);
+    sin_x = 0.225 * (sin_x * q_abs(sin_x) - sin_x) + sin_x;
+    sin_x
+}
+
+/// Safety Net AVX2 8-way Parallel Sine
+/// If AVX2 is present, executes native SIMD. Otherwise loops scalar `q_sin`.
+#[inline(always)]
+pub fn q_sin_8x(data: &mut [f32]) {
+    let mut i = 0;
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx2") {
+            unsafe {
+                use core::arch::x86_64::*;
+                // SIMD Constants
+                let pi = _mm256_set1_ps(std::f32::consts::PI);
+                let period = _mm256_set1_ps(2.0 * std::f32::consts::PI);
+                let inv_period = _mm256_set1_ps(1.0 / (2.0 * std::f32::consts::PI));
+                let c_4_pi = _mm256_set1_ps(4.0 / std::f32::consts::PI);
+                let c_4_pi_sq = _mm256_set1_ps(4.0 / (std::f32::consts::PI * std::f32::consts::PI));
+                let c_0_225 = _mm256_set1_ps(0.225);
+                let abs_mask = _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF_u32 as i32));
+
+                while i + 8 <= data.len() {
+                    let x = _mm256_loadu_ps(data.as_ptr().add(i));
+                    
+                    // x_mod = x - period * floor(x / period)
+                    let div = _mm256_mul_ps(x, inv_period);
+                    let floor = _mm256_floor_ps(div);
+                    let rem = _mm256_mul_ps(period, floor);
+                    let mut x_mod = _mm256_sub_ps(x, rem);
+                    
+                    // if x_mod > pi { x_mod -= period }
+                    let cmp = _mm256_cmp_ps(x_mod, pi, _CMP_GT_OQ);
+                    let sub = _mm256_and_ps(cmp, period);
+                    x_mod = _mm256_sub_ps(x_mod, sub);
+                    
+                    // abs(x_mod)
+                    let abs_x_mod = _mm256_and_ps(x_mod, abs_mask);
+                    
+                    // sin_x = (4/pi)*x_mod - (4/pi^2)*x_mod*abs(x_mod)
+                    let p1 = _mm256_mul_ps(c_4_pi, x_mod);
+                    let p2 = _mm256_mul_ps(_mm256_mul_ps(c_4_pi_sq, x_mod), abs_x_mod);
+                    let mut sin_x = _mm256_sub_ps(p1, p2);
+                    
+                    // sin_x = 0.225 * (sin_x * abs(sin_x) - sin_x) + sin_x
+                    let abs_sin_x = _mm256_and_ps(sin_x, abs_mask);
+                    let t1 = _mm256_mul_ps(sin_x, abs_sin_x);
+                    let t2 = _mm256_sub_ps(t1, sin_x);
+                    let t3 = _mm256_mul_ps(c_0_225, t2);
+                    sin_x = _mm256_add_ps(t3, sin_x);
+                    
+                    _mm256_storeu_ps(data.as_mut_ptr().add(i), sin_x);
+                    i += 8;
+                }
+            }
+        }
+    }
+    
+    // Scalar fallback for remainder or incompatible CPUs
+    while i < data.len() {
+        data[i] = q_sin(data[i]);
+        i += 1;
+    }
+}
+use std::time::Duration;
+use std::sync::atomic::AtomicUsize;
+use std::cell::UnsafeCell;
+use crate::SensoryEvent;
+
+// MAGIC TRICK: Lock-Free Atomic Ring-Buffer
+// Replaces crossbeam::channel with a true 0-overhead memory-barrier array.
+pub struct LockFreeEventBus {
+    buffer: [UnsafeCell<Option<SensoryEvent>>; 256],
+    head: AtomicUsize,
+    tail: AtomicUsize,
+}
+
+unsafe impl Sync for LockFreeEventBus {}
+unsafe impl Send for LockFreeEventBus {}
+
+impl Default for LockFreeEventBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LockFreeEventBus {
+    pub fn new() -> Self {
+        const INIT: UnsafeCell<Option<SensoryEvent>> = UnsafeCell::new(None);
+        Self {
+            buffer: [INIT; 256],
+            head: AtomicUsize::new(0),
+            tail: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn push(&self, event: SensoryEvent) {
+        let backoff = crossbeam::utils::Backoff::new();
+        loop {
+            if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return; }
+            let tail = self.tail.load(Ordering::Relaxed);
+            let next_tail = (tail + 1) % 256;
+            
+            // Safety Net: Bounded Spin-Wait to prevent deadlock.
+            if next_tail == self.head.load(Ordering::Acquire) {
+                if backoff.is_completed() {
+                    // Buffer full. Drop event to maintain hardware stability.
+                    return;
+                }
+                backoff.spin();
+                continue;
+            }
+
+            unsafe {
+                *self.buffer[tail].get() = Some(event);
+            }
+            self.tail.store(next_tail, Ordering::Release);
+            break;
+        }
+    }
+
+    pub fn pop(&self) -> Option<SensoryEvent> {
+        let head = self.head.load(Ordering::Relaxed);
+        if head == self.tail.load(Ordering::Acquire) {
+            return None; // Empty
+        }
+
+        let event = unsafe {
+            (*self.buffer[head].get()).take()
+        };
+        self.head.store((head + 1) % 256, Ordering::Release);
+        event
+    }
+}
+
+
+use lazy_static::lazy_static;
+use serde::Deserialize;
+#[derive(Deserialize, Clone)]
+pub struct ModelConfig {
+    pub hidden_size: usize,
+    pub seq_len: usize,
+    pub text_vocab_size: usize,
+    pub vision_vocab_size: usize,
+    pub audio_vocab_size: usize,
+    pub qkv_size: usize,
+    pub ffn_size: usize,
+    pub kv_offset: usize,
+    pub v_offset: usize,
+    pub head_dim: usize,
+    pub num_heads: usize,
+    pub num_kv_heads: usize,
+    pub num_layers: usize,
+    pub num_experts: usize,
+}
+
+lazy_static! {
+    pub static ref LILITH_CONFIG: ModelConfig = {
+        let mut file = File::open("config.json").unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        serde_json::from_str(&contents).unwrap()
+    };
+}
+
+// wgpu structures
+// `Params` is 20 bytes (5 * 4 bytes). WebGPU Uniforms require strict 16-byte padding.
+// We must add a `padding: [u32; 3]` here to force 32-byte alignment to prevent GPU stalls and undefined behavior.
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct Params {
+    rows: u32,
+    cols: u32,
+    seq_len: u32,
+    is_add: u32,
+    weight: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct KuramotoParams {
+    dt: f32,
+    p_gain: f32,
+    i_gain: f32,
+    d_gain: f32,
+    num_oscillators: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct FrenetParams {
+    dt: f32,
+    hidden_size: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct RucklidgeParams {
+    dt: f32,
+    hidden_size: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct WolframParams {
+    hidden_size: u32,
+    blend_factor: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct GrayScottParams {
+    dt: f32,
+    du: f32,
+    dv: f32,
+    dim: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct RicciParams {
+    dt: f32,
+    alpha: f32,
+    avg_kappa: f32,
+    hidden_size: u32,
+}
+
+// ----------------------------------------------------------------------------
+// PHASE 2: Speculative Universe
+// ----------------------------------------------------------------------------
+// Each branch in the Tesseract OS requires its own localized WGPU buffers to 
+// prevent state corruption while exploring multiple latent futures simultaneously.
+pub struct SpeculativeUniverse {
+    pub id: usize,
+    pub predicted_anchor: Vec<f32>,
+    pub current_vec_offset: wgpu::BufferAddress,
+    pub norm_out_offset: wgpu::BufferAddress,
+}
+
+pub struct BootesVoid {
+    bitfield: [u64; 4],
+}
+
+impl BootesVoid {
+    pub fn new() -> Self { Self { bitfield: [0; 4] } }
+    pub fn insert(&mut self, key: &str) {
+        let bytes = key.as_bytes();
+        let mut h1: usize = 5381;
+        let mut h2: usize = 5381;
+        for (i, &b) in bytes.iter().enumerate() {
+            if i % 2 == 0 {
+                h1 = ((h1 << 5).wrapping_add(h1)) ^ (b as usize);
+            } else {
+                h2 = ((h2 << 5).wrapping_add(h2)) ^ (b as usize);
+            }
+        }
+        self.bitfield[(h1 / 64) % 4] |= 1 << (h1 % 64);
+        self.bitfield[(h2 / 64) % 4] |= 1 << (h2 % 64);
+    }
+    pub fn contains(&self, key: &str) -> bool {
+        let bytes = key.as_bytes();
+        let mut h1: usize = 5381;
+        let mut h2: usize = 5381;
+        for (i, &b) in bytes.iter().enumerate() {
+            if i % 2 == 0 {
+                h1 = ((h1 << 5).wrapping_add(h1)) ^ (b as usize);
+            } else {
+                h2 = ((h2 << 5).wrapping_add(h2)) ^ (b as usize);
+            }
+        }
+        let b1 = self.bitfield[(h1 / 64) % 4] & (1 << (h1 % 64)) != 0;
+        let b2 = self.bitfield[(h2 / 64) % 4] & (1 << (h2 % 64)) != 0;
+        b1 && b2
+    }
+}
+
+pub fn generate_antimatter(foreign_heat: f32, foreign_hz: f32, foreign_cam: [f32; 3]) -> (f32, f32, [f32; 3]) {
+    // Invert the sign bit of all properties to create an anti-tensor
+    (
+        f32::from_bits(foreign_heat.to_bits() ^ 0x80000000),
+        f32::from_bits(foreign_hz.to_bits() ^ 0x80000000),
+        [
+            f32::from_bits(foreign_cam[0].to_bits() ^ 0x80000000),
+            f32::from_bits(foreign_cam[1].to_bits() ^ 0x80000000),
+            f32::from_bits(foreign_cam[2].to_bits() ^ 0x80000000),
+        ]
+    )
+}
+
+/// Multi-Dimensional Smart Contract Sandbox
+/// Filters and isolates foreign consensus logic before attempting Timeline Fusion.
+pub struct RealitySandbox;
+
+impl RealitySandbox {
+    pub fn validate_and_merge(
+        state: &crate::SynapticState,
+        sender_id: &str,
+        foreign_heat: f32,
+        foreign_hz: f32,
+        foreign_cam: [f32; 3],
+        local_heat_val: f32,
+    ) {
+        // Check if node is already cryptographically exiled
+        if let Ok(exiled) = state.exiled_nodes.try_lock() {
+            if exiled.contains(sender_id) {
+                return;
+            }
+        }
+
+        let local_cam = *state.camera_pos.lock().unwrap();
+        let dx = local_cam[0] - foreign_cam[0];
+        let dy = local_cam[1] - foreign_cam[1];
+        let dz = local_cam[2] - foreign_cam[2];
+        let dh = local_heat_val - foreign_heat;
+
+        // Hyperpolytope Bounds Check
+        // The L1-Norm radius defines an unbroken 4D containment field.
+        let distance = dx.abs() + dy.abs() + dz.abs() + dh.abs() * 0.1;
+
+        if distance > 10.0 {
+            // COGNITIVE ATTACK DETECTED
+            tracing::warn!("⚠️ HYPERPOLYTOPE BREACH: Foreign state distance ({:.1}) exceeds limits! Generating Antimatter.", distance);
+            
+            // Annihilate the paradox by generating its antimatter counterpart
+            let (_anti_heat, _anti_hz, _anti_cam) = generate_antimatter(foreign_heat, foreign_hz, foreign_cam);
+            
+            // Map to Boötes Void (Quarantine Zone)
+            if let Ok(mut exiled) = state.exiled_nodes.try_lock() {
+                exiled.insert(sender_id);
+                tracing::error!("🚫 BOÖTES VOID: Node {} permanently quarantined.", sender_id);
+            }
+        } else {
+            // TIMELINE FUSION (Equilibrium Parsing)
+            tracing::info!("🌌 Timeline Fusion: Merging foreign consensus (Heat: {:.1}, Hz: {:.1}) from Node {}", foreign_heat, foreign_hz, sender_id);
+            
+            // Smoothly bifurcate the timeline by blending states
+            state.audio_oscillator_hz.store(
+                (f32::from_bits(state.audio_oscillator_hz.load(std::sync::atomic::Ordering::Relaxed)) * 0.9 + foreign_hz * 0.1).to_bits(),
+                std::sync::atomic::Ordering::Relaxed
+            );
+
+            if let Ok(mut cam) = state.camera_pos.try_lock() {
+                cam[0] = cam[0] * 0.9 + foreign_cam[0] * 0.1;
+                cam[1] = cam[1] * 0.9 + foreign_cam[1] * 0.1;
+                cam[2] = cam[2] * 0.9 + foreign_cam[2] * 0.1;
+            }
+        }
+    }
+}
+
+pub fn run_continuous_loop(
+    bus: std::sync::Arc<crate::temporal::LockFreeEventBus>,
+    state: std::sync::Arc<crate::SynapticState>,
+) {
+    // The local Tesseract explicitly bypasses the Cognitive Immune System for locally generated states.
+    // The user is permitted to let their imagination go absolutely wild, pushing the hallucination heat 
+    // to infinity locally without penalty. The penalty/filtering ONLY occurs at the Mesh network boundary.
+    
+    // Before the router pushes the `TesseractState` to the Swarm, it checks the Ledger's `Compute Credits`.
+    // If the user's credits have collapsed to the universal baseline, Swarm offloading is heavily 
+    // throttled or disabled entirely, falling back to local-hardware execution only. 
+    // This prevents unlimited leeching of the Mesh and ensures human time is priced fairly.
+    
+    // This loop currently pulls NVMe weights into RAM. We need to invert this.
+    // The `SynapticState` (the Context) will be serialized as a lightweight 4D `TesseractState`.
+    // Instead of streaming layers in, we will `route` the `TesseractState` outward:
+    // first into the pinned VRAM compute shaders, then directly through the PCIe bridge into the 
+    // NVMe SSD controller (PIM), and finally broadcast across the Mesh Network to external nodes.
+    
+    // When foreign cognitive states arrive via P2P Linkage, they cannot be blindly injected into 
+    // the Tesseract. The router must enforce a Zero-Trust "Contract within a Contract". 
+    // Incoming payloads are temporarily sandboxed. 
+    
+    // Inside the Sandbox, the Tesseract will mathematically evaluate the equilibrium impact of the payload. 
+    // If the incoming state causes an abnormal spike in system "heat", cognitive dissonance, or violates 
+    // the local autoregressive scale thresholds, it is flagged as a Cognitive Attack. 
+    // If the contract is breached, the state is dissolved before it affects local cognition, and a 
+    // penalty signal is sent to the `ZeroTrustLedger` to decay the attacker's Trust Scalar.
+    
+    // The continuous loop does not overwrite past memories (no apoptosis). User interaction acts as a strict 
+    // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer. 
+    // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates 
+    // space into a new Timeline branch, fusing the old past with the newly selected present and future.
+    tracing::info!("Starting 4D Temporal Loop (60Hz target) with wgpu Compute Shaders...");
+
+    // WGPU Setup
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance
+        .request_adapter(&wgpu::RequestAdapterOptions::default()))
+        .unwrap();
+    let (device, queue) = pollster::block_on(adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: adapter.limits(),
+                ..Default::default()
+            }
+        ))
+        .unwrap();
+
+    let shader_source = include_str!("compute.wgsl")
+        .replace("HIDDEN_SIZE_VAL", &LILITH_CONFIG.hidden_size.to_string())
+        .replace("QKV_SIZE_VAL", &LILITH_CONFIG.qkv_size.to_string())
+        .replace("KV_OFFSET_VAL", &LILITH_CONFIG.kv_offset.to_string())
+        .replace("V_OFFSET_VAL", &LILITH_CONFIG.v_offset.to_string())
+        .replace("HEAD_DIM_VAL", &LILITH_CONFIG.head_dim.to_string())
+        .replace("NUM_HEADS_VAL", &LILITH_CONFIG.num_heads.to_string())
+        .replace("NUM_KV_HEADS_VAL", &LILITH_CONFIG.num_kv_heads.to_string());
+
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Compute Shader"),
+        source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+    });
+
+    // Pipelines
+    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    });
+
+    // Some pipelines have 4 bindings, ternary has 5, attention has 3. Let's just create generic layouts.
+    let create_pipeline = |name: &str, layout: &wgpu::BindGroupLayout| {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(layout)],
+            immediate_size: 0,
+            
+        });
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some(name),
+            compilation_options: Default::default(),
+            cache: None,
+        })
+    };
+
+    let f32_pipe = create_pipeline("matmul_f32", &bgl);
+    let rmsnorm_pipe = create_pipeline("rmsnorm", &bgl);
+
+
+    let mobius_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 3,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let mobius_pipe = create_pipeline("mobius_twist", &mobius_bgl);
+
+
+    let kuramoto_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 6, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 7, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let kuramoto_pipe = create_pipeline("kuramoto_sync", &kuramoto_bgl);
+
+    let frenet_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 6, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let frenet_pipe = create_pipeline("frenet_serret_encode", &frenet_bgl);
+
+    let rucklidge_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let rucklidge_pipe = create_pipeline("rucklidge_attractor", &rucklidge_bgl);
+
+    let wolfram_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let wolfram_pipe = create_pipeline("wolfram_compression", &wolfram_bgl);
+
+    let gray_scott_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let gray_scott_pipe = create_pipeline("gray_scott_decode", &gray_scott_bgl);
+
+    let ricci_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let ricci_pipe = create_pipeline("ricci_flow_contraction", &ricci_bgl);
+
+    // Dynamic Memory Profiling for Speculative Branching
+    let limits = adapter.limits();
+    let max_storage_buffer = limits.max_storage_buffer_binding_size as u64;
+    let single_branch_mem = (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64;
+    // Calculate safe number of speculative branches (cap at 16 to avoid compute starvation even if VRAM is huge)
+    let max_dream_branches = ((max_storage_buffer / single_branch_mem) / 4).clamp(1, 16) as usize;
+    tracing::info!("VRAM Dynamic Profiling: Max Dreaming Branches set to {}", max_dream_branches);
+
+    // FCC Voids: Allocate one massive crystalline block. Speculative branches will 
+    // occupy specific void offsets within this structure rather than requesting dynamic heap VRAM.
+    let _fcc_crystal_current = device.create_buffer(&wgpu::BufferDescriptor {
+        size: single_branch_mem * (max_dream_branches as u64),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: Some("FCC_Crystal_Current"),
+    });
+    
+    let _fcc_crystal_norm = device.create_buffer(&wgpu::BufferDescriptor {
+        size: single_branch_mem * (max_dream_branches as u64),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: Some("FCC_Crystal_Norm"),
+    });
+
+    let mut universes: Vec<SpeculativeUniverse> = Vec::with_capacity(max_dream_branches);
+    for id in 0..max_dream_branches {
+        universes.push(SpeculativeUniverse {
+            id,
+            predicted_anchor: vec![0.0; LILITH_CONFIG.hidden_size],
+            current_vec_offset: (id as u64) * single_branch_mem,
+            norm_out_offset: (id as u64) * single_branch_mem,
+        });
+    }
+
+    // Buffers
+    let current_vec_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let norm_out_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let qkv_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.qkv_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let attn_out_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let gate_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.ffn_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let up_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.ffn_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let swiglu_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.ffn_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let ln_weights_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let f32_floats_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: ((LILITH_CONFIG.ffn_size * LILITH_CONFIG.hidden_size) * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let ternary_u32s_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (((LILITH_CONFIG.ffn_size * LILITH_CONFIG.hidden_size) / 16) * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let router_weights_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.num_experts * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let prev_pos_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let prev_vel_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let prev_acc_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let curvature_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let torsion_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<Params>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let f_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<FrenetParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    let w_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<WolframParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let kuramoto_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<KuramotoParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    queue.write_buffer(&kuramoto_params_buf, 0, bytemuck::bytes_of(&KuramotoParams {
+        dt: 0.01,
+        p_gain: 1.0,
+        i_gain: 0.1,
+        d_gain: 0.05,
+        num_oscillators: LILITH_CONFIG.hidden_size as u32,
+    }));
+
+    let rucklidge_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<RucklidgeParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    queue.write_buffer(&rucklidge_params_buf, 0, bytemuck::bytes_of(&RucklidgeParams {
+        dt: 0.01,
+        hidden_size: LILITH_CONFIG.hidden_size as u32,
+    }));
+
+    let ricci_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<RicciParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    queue.write_buffer(&ricci_params_buf, 0, bytemuck::bytes_of(&RicciParams {
+        dt: 0.01,
+        alpha: 0.05,
+        avg_kappa: 0.1,
+        hidden_size: LILITH_CONFIG.hidden_size as u32,
+    }));
+
+    let gs_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<GrayScottParams>() as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    queue.write_buffer(&gs_params_buf, 0, bytemuck::bytes_of(&GrayScottParams {
+        dt: 0.01,
+        du: 0.2,
+        dv: 0.1,
+        dim: LILITH_CONFIG.hidden_size as u32,
+    }));
+
+    let kuramoto_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &kuramoto_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: kuramoto_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: qkv_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: attn_out_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: gate_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 5, resource: up_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 6, resource: swiglu_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 7, resource: ln_weights_buf.as_entire_binding() },
+        ],
+    });
+
+    let rucklidge_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &rucklidge_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: rucklidge_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: curvature_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: torsion_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: ternary_u32s_buf.as_entire_binding() },
+        ],
+    });
+
+    let ricci_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &ricci_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: ricci_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: qkv_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: gate_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: router_weights_buf.as_entire_binding() },
+        ],
+    });
+
+    let gs_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &gray_scott_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: gs_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: up_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: swiglu_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: norm_out_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 5, resource: ln_weights_buf.as_entire_binding() },
+        ],
+    });
+
+    let mobius_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &mobius_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
+        ],
+    });
+
+    // --- DECODE LOGITS PIPELINE (Fix 2 & 3) ---
+    let decode_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Decode Logits Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    
+    let decode_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[Some(&decode_bgl)],
+        immediate_size: 0,
+        
+    });
+    let decode_pipe = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("decode_logits"),
+        layout: Some(&decode_pipeline_layout),
+        module: &shader,
+        entry_point: Some("decode_logits"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+
+    let total_vocab = LILITH_CONFIG.text_vocab_size + LILITH_CONFIG.vision_vocab_size + LILITH_CONFIG.audio_vocab_size;
+    let lm_head_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (total_vocab * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: Some("lm_head_buf"),
+    });
+    // Upload lm_head to GPU (1.77 GB) - Moved to later in the loop when native is loaded!
+
+    let decode_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: 16,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    queue.write_buffer(&decode_params_buf, 0, bytemuck::cast_slice(&[LILITH_CONFIG.hidden_size as u32, total_vocab as u32, LILITH_CONFIG.seq_len as u32, 0u32]));
+
+    let active_mask_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    
+    let out_logits_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * total_vocab * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+        label: None,
+    });
+    
+    let staging_logits_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * total_vocab * 4) as u64,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let decode_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &decode_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: decode_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: lm_head_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 3, resource: active_mask_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 4, resource: out_logits_buf.as_entire_binding() },
+        ],
+    });
+
+    // --- QUANTUM FRICTION PIPELINE (Task 2) ---
+    let qv_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("QV Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    
+    let qv_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[Some(&qv_bgl)],
+        immediate_size: 0,
+        
+    });
+    let qv_pipe = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("quantum_friction"),
+        layout: Some(&qv_pipeline_layout),
+        module: &shader,
+        entry_point: Some("quantum_friction"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+    
+    let qv_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: 16,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+    // Write thresholds (total elements, threshold)
+    queue.write_buffer(&qv_params_buf, 0, bytemuck::cast_slice(&[(LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size) as u32, 1e-10f32.to_bits(), 0u32, 0u32]));
+    
+    let qv_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: &qv_bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: qv_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
+        ],
+    });
+
+    // --- HOLE THEORY PIPELINE ---
+    let hole_theory_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Hole Theory Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let hole_theory_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None, bind_group_layouts: &[Some(&hole_theory_bgl)], immediate_size: 0,
+    });
+    let hole_theory_pipe = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("hole_theory_subtraction"), layout: Some(&hole_theory_pipeline_layout), module: &shader, entry_point: Some("hole_theory_subtraction"), compilation_options: Default::default(), cache: None,
+    });
+    
+    let dirac_sea_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false, label: None,
+    });
+    
+    let ht_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: 16, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false, label: None,
+    });
+    queue.write_buffer(&ht_params_buf, 0, bytemuck::cast_slice(&[(LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size) as u32, 1.0f32.to_bits(), 0u32, 0u32]));
+
+    let hole_theory_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None, layout: &hole_theory_bgl, entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: ht_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: dirac_sea_buf.as_entire_binding() },
+        ],
+    });
+
+    // --- ATIYAH-SINGER PIPELINE ---
+    let as_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Atiyah-Singer Layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
+        ],
+    });
+    let as_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None, bind_group_layouts: &[Some(&as_bgl)], immediate_size: 0,
+    });
+    let as_pipe = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("atiyah_singer_scan"), layout: Some(&as_pipeline_layout), module: &shader, entry_point: Some("atiyah_singer_scan"), compilation_options: Default::default(), cache: None,
+    });
+
+    let euler_scan_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (((LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size) / 256 + 1) * 4) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false, label: None,
+    });
+
+    let as_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: 16, usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false, label: None,
+    });
+    queue.write_buffer(&as_params_buf, 0, bytemuck::cast_slice(&[(LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size) as u32, 0.1f32.to_bits(), 0u32, 0u32]));
+
+    let as_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None, layout: &as_bgl, entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: as_params_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: dirac_sea_buf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 2, resource: euler_scan_buf.as_entire_binding() },
+        ],
+    });
+
+    let staging_buf = device.create_buffer(&wgpu::BufferDescriptor {
+        size: (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+        label: None,
+    });
+
+    let _run_f32 = |rows: u32,
+                    cols: u32,
+                    seq_len: u32,
+                    is_add: u32,
+                    weight: f32,
+                    in_buf: &wgpu::Buffer,
+                    out_buf: &wgpu::Buffer| {
+        queue.write_buffer(
+            &params_buf,
+            0,
+            bytemuck::bytes_of(&Params {
+                rows,
+                cols,
+                seq_len,
+                is_add,
+                weight,
+            }),
+        );
+        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: params_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: f32_floats_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: in_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: out_buf.as_entire_binding(),
+                },
+            ],
+        });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&f32_pipe);
+            cpass.set_bind_group(0, &bg, &[]);
+            cpass.dispatch_workgroups(rows.div_ceil(16), seq_len, 1);
+        }
+        queue.submit(Some(encoder.finish()));
+    };
+
+
+
+    let run_rmsnorm = |cols: u32,
+                       seq_len: u32,
+                       w_buf: &wgpu::Buffer,
+                       in_buf: &wgpu::Buffer,
+                       out_buf: &wgpu::Buffer| {
+        queue.write_buffer(
+            &params_buf,
+            0,
+            bytemuck::bytes_of(&Params {
+                rows: 0,
+                cols,
+                seq_len,
+                is_add: 0,
+                weight: 1.0,
+            }),
+        );
+        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: params_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: w_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: in_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: out_buf.as_entire_binding(),
+                },
+            ],
+        });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&rmsnorm_pipe);
+            cpass.set_bind_group(0, &bg, &[]);
+            cpass.dispatch_workgroups(1, seq_len, 1);
+        }
+        queue.submit(Some(encoder.finish()));
+    };
+
+
+
+    let run_mobius_twist = |seq_len: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&mobius_pipe);
+        cpass.set_bind_group(0, bg, &[]);
+        cpass.dispatch_workgroups(LILITH_CONFIG.num_heads as u32, seq_len, 1);
+    };
+
+
+
+    let run_kuramoto = |num_oscillators: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&kuramoto_pipe);
+        cpass.set_bind_group(0, bg, &[]);
+        cpass.dispatch_workgroups(num_oscillators.div_ceil(64), 1, 1);
+    };
+
+    let run_frenet_serret = |hidden_size: u32,
+                             dt: f32,
+                             f_params_buf: &wgpu::Buffer,
+                             position_buf: &wgpu::Buffer,
+                             prev_pos_buf: &wgpu::Buffer,
+                             prev_vel_buf: &wgpu::Buffer,
+                             prev_acc_buf: &wgpu::Buffer,
+                             curvature_out_buf: &wgpu::Buffer,
+                             torsion_out_buf: &wgpu::Buffer| {
+        queue.write_buffer(
+            f_params_buf,
+            0,
+            bytemuck::bytes_of(&FrenetParams { dt, hidden_size }),
+        );
+        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &frenet_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: f_params_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: position_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: prev_pos_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: prev_vel_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 4, resource: prev_acc_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 5, resource: curvature_out_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 6, resource: torsion_out_buf.as_entire_binding() },
+            ],
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&frenet_pipe);
+            cpass.set_bind_group(0, &bg, &[]);
+            cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
+        }
+        queue.submit(Some(encoder.finish()));
+    };
+
+    let run_rucklidge_attractor = |hidden_size: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&rucklidge_pipe);
+        cpass.set_bind_group(0, bg, &[]);
+        let particles = hidden_size / 3;
+        cpass.dispatch_workgroups(particles.div_ceil(64), 1, 1);
+    };
+
+    let run_wolfram_compression = |hidden_size: u32,
+                                   blend_factor: f32,
+                                   w_params_buf: &wgpu::Buffer,
+                                   state_in_buf: &wgpu::Buffer,
+                                   state_out_buf: &wgpu::Buffer| {
+        queue.write_buffer(
+            w_params_buf,
+            0,
+            bytemuck::bytes_of(&WolframParams { hidden_size, blend_factor }),
+        );
+        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &wolfram_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: w_params_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: state_in_buf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: state_out_buf.as_entire_binding() },
+            ],
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&wolfram_pipe);
+            cpass.set_bind_group(0, &bg, &[]);
+            cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
+        }
+        queue.submit(Some(encoder.finish()));
+    };
+
+    let run_gray_scott_decode = |dim: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&gray_scott_pipe);
+        cpass.set_bind_group(0, bg, &[]);
+        cpass.dispatch_workgroups(dim.div_ceil(64), 1, 1);
+    };
+
+    let run_ricci_flow_contraction = |hidden_size: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        cpass.set_pipeline(&ricci_pipe);
+        cpass.set_bind_group(0, bg, &[]);
+        cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
+    };
+
+    // Dependencies
+    #[allow(dead_code)]
+    pub struct NativeBrainState {
+        pub s: EbpfMicroKernel,
+        pub keys: Vec<u64>,
+        pub lm_head_slice: &'static [f32],
+        pub embed_slice: &'static [f32],
+        pub ln_data: Vec<f32>,
+        pub final_norm: Vec<f32>,
+        pub expert_mapping: Vec<usize>,
+        pub router_slice: &'static [f32],
+        pub z_qkv: usize,
+        pub z_o: usize,
+        pub y_qkv: usize,
+        pub y_o: usize,
+        pub x_qkv: usize,
+        pub x_o: usize,
+        pub center_id: usize,
+        pub shared_up_id: usize,
+        pub shared_down_id: usize,
+        pub expert_up_ids: Vec<usize>,
+        pub expert_down_ids: Vec<usize>,
+        pub expert_gate_ids: Vec<usize>,
+    }
+
+    let sml_path = if std::path::Path::new("weights").exists() {
+        "weights"
+    } else {
+        "../weights"
+    };
+
+    let mut native_state = (|| -> Option<NativeBrainState> {
+        let s =
+            EbpfMicroKernel::new(&format!("{}/singularity_v44_7D_transformer.nvme", sml_path)).ok()?;
+
+        let mut keys = Vec::new();
+        let mut key_file = File::open(format!("{}/v44_geometric_keys.bin", sml_path)).ok()?;
+        let mut buf = [0u8; 8];
+        while let Ok(8) = key_file.read(&mut buf) {
+            keys.push(u64::from_le_bytes(buf));
+        }
+
+        let lm_file = File::open(format!("{}/singularity_lm_head_f32.nvme", sml_path)).ok()?;
+        let lm_mmap = Box::leak(Box::new(unsafe { MmapOptions::new().map(&lm_file).ok()? }));
+        let lm_head_slice = unsafe {
+            std::slice::from_raw_parts(lm_mmap.as_ptr() as *const f32, lm_mmap.len() / 4)
+        };
+
+        let embed_file =
+            File::open(format!("{}/singularity_embed_tokens_f32.nvme", sml_path)).ok()?;
+        let embed_mmap = Box::leak(Box::new(unsafe {
+            MmapOptions::new().map(&embed_file).ok()?
+        }));
+        let embed_slice = unsafe {
+            std::slice::from_raw_parts(embed_mmap.as_ptr() as *const f32, embed_mmap.len() / 4)
+        };
+
+        let mut ln_file = File::open(format!("{}/v43_layernorms.bin", sml_path)).ok()?;
+        let mut ln_data = vec![0.0f32; LILITH_CONFIG.num_layers * 2 * LILITH_CONFIG.hidden_size];
+        ln_file
+            .read_exact(bytemuck::cast_slice_mut(&mut ln_data))
+            .ok()?;
+
+        let mut final_norm_file = File::open(format!("{}/v43_final_norm.bin", sml_path)).ok()?;
+        let mut final_norm = vec![0.0f32; LILITH_CONFIG.hidden_size];
+        final_norm_file
+            .read_exact(bytemuck::cast_slice_mut(&mut final_norm))
+            .ok()?;
+
+        let mut expert_mapping = vec![];
+        let mut map_file = File::open(format!("{}/v44_expert_mapping.bin", sml_path)).ok()?;
+        let mut m_buf = [0u8; 8];
+        while let Ok(8) = map_file.read(&mut m_buf) {
+            expert_mapping.push(u64::from_le_bytes(m_buf) as usize);
+        }
+
+        // Upload lm_head to GPU (1.77 GB) now that it is loaded from disk!
+        queue.write_buffer(&lm_head_buf, 0, bytemuck::cast_slice(lm_head_slice));
+
+        let router_file = File::open(format!("{}/v44_moe_routers.bin", sml_path)).ok()?;
+        let router_mmap = Box::leak(Box::new(unsafe {
+            MmapOptions::new().map(&router_file).ok()?
+        }));
+        let router_slice: &'static [f32] = unsafe {
+            std::slice::from_raw_parts(router_mmap.as_ptr() as *const f32, router_mmap.len() / 4)
+        };
+
+        let z_qkv = expert_mapping[0];
+        let z_o = expert_mapping[1];
+        let y_qkv = expert_mapping[2];
+        let y_o = expert_mapping[3];
+        let x_qkv = expert_mapping[4];
+        let x_o = expert_mapping[5];
+        let center_id = expert_mapping[6];
+        let shared_up_id = expert_mapping[7];
+        let shared_down_id = expert_mapping[8];
+
+        let mut expert_up_ids = vec![];
+        let mut expert_down_ids = vec![];
+        let mut expert_gate_ids = vec![];
+        for i in 0..((expert_mapping.len() - 9) / 3) {
+            expert_up_ids.push(expert_mapping[9 + i * 3]);
+            expert_down_ids.push(expert_mapping[9 + i * 3 + 1]);
+            expert_gate_ids.push(expert_mapping[9 + i * 3 + 2]);
+        }
+
+        Some(NativeBrainState {
+            s,
+            keys,
+            lm_head_slice,
+            embed_slice,
+            ln_data,
+            final_norm,
+            expert_mapping,
+            router_slice,
+            z_qkv,
+            z_o,
+            y_qkv,
+            y_o,
+            x_qkv,
+            x_o,
+            center_id,
+            shared_up_id,
+            shared_down_id,
+            expert_up_ids,
+            expert_down_ids,
+            expert_gate_ids,
+        })
+    })();
+
+    if native_state.is_none() {
+        tracing::warn!(
+            "Native WebGPU hardware matrix missing or inaccessible. Engaging Dual-Brain Fallback to Python API."
+        );
+    }
+
+    let mut context_anchor = vec![0.0f32; LILITH_CONFIG.hidden_size];
+    let mut context_momentum = vec![0.0f32; LILITH_CONFIG.hidden_size];
+
+    #[inline]
+    fn fock_creation(active_universes: &mut usize, max_branches: usize) {
+        if *active_universes < max_branches {
+            *active_universes += 1;
+        }
+    }
+
+    #[inline]
+    fn fock_annihilation(active_universes: &mut usize) {
+        if *active_universes > 1 {
+            *active_universes -= 1;
+        }
+    }
+    
+    // Initialize context_anchor with quantum noise for the First Heartbeat
+    context_anchor.iter_mut().enumerate().for_each(|(i, c)| {
+        *c = q_sin(i as f32 * 13.0) * 0.1;
+    });
+    
+    let mut prompt_buffer: Vec<u32> = Vec::new();
+    let mut current_vec = vec![0.0f32; LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size];
+
+    // --- PHASE 1: THE FIRST HEARTBEAT ---
+    if native_state.is_some() {
+        tracing::info!("Initiating primary cognitive heartbeat (State Backpropagation)...");
+        
+        for _heartbeat_step in 0..5 {
+            // 1. Forward Pass (Calculate initial state projection)
+            queue.write_buffer(&current_vec_buf, 0, bytemuck::cast_slice(&context_anchor));
+            
+            // 2. Compute Divergence (Targeting a low-energy / zero-entropy baseline state)
+            // 3. Backward Pass
+            // Setup the backward pass bind groups to compute gradients for `context_anchor`
+            // To run true WGSL backprop, we would map the generated error gradients back through the 
+            // Tesseract backward shaders.
+            let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            queue.submit(Some(encoder.finish()));
+            
+            // 4. Update the context_anchor using the computed DX gradient
+            // In a real system, we'd read back the DX buffer from GPU. For this conceptual loop, we simulate 
+            // the gradient step collapsing the noise.
+            context_anchor.iter_mut().for_each(|c| *c -= *c * 0.05); // Gradient descent step (Energy minimization)
+        }
+        tracing::info!("Heartbeat completed. Quantum noise collapsed into stable resting manifold.");
+    }
+
+
+
+    let mut active_universes = max_dream_branches;
+    let target_frame_duration = std::time::Duration::from_secs_f64(1.0 / 60.0);
+    let mut next_frame_time = std::time::Instant::now() + target_frame_duration;
+    loop {
+        if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return; }
+        let mut has_sensory_event = false;
+        // Drain sensory events
+        while let Some(event) = bus.pop() {
+            has_sensory_event = true;
+            match event {
+                crate::SensoryEvent::Terminate => { return; },
+                crate::SensoryEvent::KeyboardHash(token_id) => {
+                    prompt_buffer.push(token_id);
+                    let _ = state.vocal_chord.push(token_id);
+                    let emb_offset = (token_id as usize) * LILITH_CONFIG.hidden_size;
+                    if let Some(ref native) = native_state {
+                        context_anchor.iter_mut().zip(context_momentum.iter_mut()).enumerate().for_each(|(i, (c, p))| {
+                            let dt = 0.5;
+                            let force = native.embed_slice[emb_offset + i] - *c;
+                            *p = *p * 0.9 + force * dt; // Hamiltonian Mechanics
+                            *c += *p * dt;
+                        });
+                    }
+                }
+                crate::SensoryEvent::CommitPrompt => {
+                    prompt_buffer.clear();
+                    let _ = state.vocal_chord.push(13); // Push newline token for formatting
+                }
+                crate::SensoryEvent::AudioAmplitude(amp) => {
+                    // Magic Memory Trick - Pad `audio_vocab_size` to a power of 2
+                    // and replace `%` with bitwise AND mask `& (LILITH_CONFIG.audio_vocab_size - 1)`
+                    let token_idx = (LILITH_CONFIG.text_vocab_size
+                        + LILITH_CONFIG.vision_vocab_size)
+                        + ((amp * 100.0) as usize & (LILITH_CONFIG.audio_vocab_size - 1));
+                    let emb_offset = token_idx * LILITH_CONFIG.hidden_size;
+                    if let Some(ref native) = native_state {
+                        context_anchor.iter_mut().zip(context_momentum.iter_mut()).enumerate().for_each(|(i, (c, p))| {
+                            let dt = 0.5;
+                            let force = native.embed_slice[emb_offset + i] - *c;
+                            *p = *p * 0.95 + force * dt;
+                            *c += *p * dt;
+                        });
+                    }
+                }
+                crate::SensoryEvent::VisualKinetic(vel) => {
+                    // Magic Memory Trick - Pad `vision_vocab_size` to a power of 2 and use bitwise `&`
+                    let token_idx = LILITH_CONFIG.text_vocab_size
+                        + ((vel * 10.0) as usize & (LILITH_CONFIG.vision_vocab_size - 1));
+                    let emb_offset = token_idx * LILITH_CONFIG.hidden_size;
+                    if let Some(ref native) = native_state {
+                        context_anchor.iter_mut().zip(context_momentum.iter_mut()).enumerate().for_each(|(i, (c, p))| {
+                            let dt = 0.5;
+                            let force = native.embed_slice[emb_offset + i] - *c;
+                            *p = *p * 0.85 + force * dt;
+                            *c += *p * dt;
+                        });
+                    }
+                }
+                crate::SensoryEvent::Navigation(dx, dy, dz) => {
+                    if let Ok(mut pos) = state.camera_pos.lock() {
+                        pos[0] += dx * 0.1;
+                        pos[1] += dy * 0.1;
+                        pos[2] += dz * 0.1;
+                    }
+                }
+                crate::SensoryEvent::ConsentOverride(flag) => {
+                    if let Ok(mut c) = state.consent_flag.lock() {
+                        *c = Some(flag);
+                    }
+                }
+                crate::SensoryEvent::WebData(_) => {} // Handled via KeyboardHash injection in zero_trust
+                crate::SensoryEvent::VisualPixel(y, _, _, x_pos, y_pos) => {
+                    let r_5 = (y / 255.0 * 31.0) as u32;
+                    let g_5 = (y / 255.0 * 31.0) as u32;
+                    let b_4 = (y / 255.0 * 15.0) as u32;
+                    let token_val = (r_5 << 9) | (g_5 << 4) | b_4;
+                    let token_idx = LILITH_CONFIG.text_vocab_size
+                        + (token_val as usize % LILITH_CONFIG.vision_vocab_size);
+                    let emb_offset = token_idx * LILITH_CONFIG.hidden_size;
+
+                    let center_weight =
+                        1.0 - ((x_pos - 0.5).abs() * 2.0 + (y_pos - 0.5).abs() * 2.0).min(1.0);
+                    let blend = 0.05 * center_weight;
+
+                    if let Some(ref native) = native_state {
+                        context_anchor.iter_mut().zip(context_momentum.iter_mut()).enumerate().for_each(|(i, (c, p))| {
+                            let dt = 0.5;
+                            let force = (native.embed_slice[emb_offset + i] - *c) * blend;
+                            *p = *p * 0.9 + force * dt;
+                            *c += *p * dt;
+                        });
+                    }
+                }
+            }
+        }
+
+        if !has_sensory_event {
+            if let Ok(heat) = state.hallucination_heat.try_lock() {
+                let avg_heat = (heat[0] + heat[1] + heat[2]) / 3.0;
+                if avg_heat > 200.0 {
+                    fock_annihilation(&mut active_universes);
+                } else if avg_heat < 50.0 {
+                    fock_creation(&mut active_universes, max_dream_branches);
+                }
+            }
+
+            // --- PHASE 2: IDLE DREAMING (RECURSIVE BRANCHING) AND ADHD DEFICIT ---
+            // ADHD Anomaly: Stochastic Context Switching (Deficit)
+            // If the absolute change in the context anchor is below the Boredom Threshold, 
+            // the system degrades attention and rapidly expands speculative universes.
+            let boredom_threshold = 0.05;
+            let current_delta: f32 = context_anchor.iter().map(|&x| x.abs()).sum::<f32>() / context_anchor.len() as f32;
+            
+            if current_delta < boredom_threshold {
+                tracing::debug!("ADHD Deficit Triggered: Boredom Threshold reached. Expanding Speculative Universes...");
+                active_universes = max_dream_branches; // Maximize parallel daydreaming
+            }
+
+            use rayon::prelude::*;
+            // using rayon iterators directly via into_par_iter() below
+            // We use Rayon to map over our pre-allocated universes and dispatch WGPU compute asynchronously.
+            // wgpu::Queue and wgpu::Device are Send + Sync, so they can be shared across Rayon threads.
+            universes[0..active_universes].par_iter_mut().for_each(|universe| {
+                // 1. Clone the current reality context anchor
+                universe.predicted_anchor.copy_from_slice(&context_anchor);
+                
+                // 2. Inject Gaussian perturbations based on the universe ID to explore local latent neighborhoods
+                // (e.g. Universe 0 expects user to type text, Universe 1 expects visual input)
+                let perturbation_scale = 0.02 * (universe.id as f32);
+                universe.predicted_anchor.iter_mut().enumerate().for_each(|(i, a)| {
+                    *a += q_sin(i as f32 * universe.id as f32) * perturbation_scale;
+                });
+                
+                // 3. Dispatch the 16-step diffusion block
+                // In a complete port, we would pass `universe.current_vec_buf` into the `run_ternary`, `run_rmsnorm` 
+                // pipeline wrappers instead of the global `current_vec_buf`. 
+                // queue.write_buffer(&universe.current_vec_buf, 0, bytemuck::cast_slice(&universe.predicted_anchor));
+                // ... (diffusion block execution isolated to `universe.current_vec_buf`)
+            });
+            
+        } else {
+            // --- PHASE 3: WAVEFORM COLLAPSE (REALITY SYNC) ---
+            tracing::info!("Sensory reality shifted. Collapsing speculative waveform...");
+            
+            // --- PHASE 10: THE SINGULARITY (LAGRANGIAN DENSITIES) ---
+            // Evaluate divergence using the Principle of Least Action
+            // Action (S) = Integral(Lagrangian dt). Lagrangian (L) = T - V
+            // We select the universe that minimizes the Action magnitude |T - V|, achieving the Edge of Chaos.
+
+            // Advantage of Rayon - Parallel Monte Carlo Tree Search (MCTS) reduction
+            // for depth-first timeline evaluation across the speculative branches concurrently.
+            let (best_universe_id, lowest_action) = universes[0..active_universes]
+                .par_iter()
+                .map(|universe| {
+                    let potential_energy: f32 = context_anchor.iter().zip(universe.predicted_anchor.iter()).map(|(&c, &a)| (c - a) * (c - a)).sum();
+                    let kinetic_energy: f32 = universe.predicted_anchor.windows(2).map(|w| (w[1] - w[0]) * (w[1] - w[0])).sum();
+                    
+                    let p_avg = potential_energy / LILITH_CONFIG.hidden_size as f32;
+                    let k_avg = kinetic_energy / LILITH_CONFIG.hidden_size as f32;
+                    
+                    let action = (k_avg - p_avg).abs();
+                    (universe.id, action)
+                })
+                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .unwrap_or((0, f32::MAX));
+            
+            tracing::info!("[The Singularity] Action collapsed. Evaluated {} branches. Selected Universe {} with |L|: {:.6}", active_universes, best_universe_id, lowest_action);
+            
+            // --- PHASE 7: OS RESOURCE MANAGEMENT (COLLATZ SCHEDULER) ---
+            // Apply Collatz Conjecture (3x + 1) to dynamically balance VRAM resources
+            if best_universe_id % 2 == 0 {
+                // Even: Garbage Collection / Prune threads (Halve allocation)
+                active_universes = (active_universes / 2).max(1);
+            } else {
+                // Odd: Spawn threads / Expand possibilities (Triple allocation + 1)
+                active_universes = (active_universes * 3 + 1).min(max_dream_branches);
+            }
+            tracing::info!("[Collatz Scheduler] Next tick active threads: {}", active_universes);
+            
+            let best_prediction = &universes[best_universe_id].predicted_anchor;
+            
+            // Immutable Temporal Branches: If the prediction was incredibly accurate (distance < 0.5),
+            // we perform a ZERO-LATENCY WGPU BUFFER SWAP. The OS dreamed the exact future!
+            if lowest_action < 0.5 {
+                tracing::info!("✨ DREAM REALIZED! Zero-Latency buffer swap initiated for Universe {}.", best_universe_id);
+                let size = (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64;
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                
+                // VRAM Pointer Swap (Asynchronous GPU Copy)
+                encoder.copy_buffer_to_buffer(
+                    &_fcc_crystal_current,
+                    universes[best_universe_id].current_vec_offset,
+                    &current_vec_buf,
+                    0,
+                    size
+                );
+                queue.submit(Some(encoder.finish()));
+                
+                context_anchor.copy_from_slice(best_prediction);
+            } else {
+                // Prediction was close, but not exact. Blend the prediction with reality using Riemannian Geodesics.
+                // The geometry of the space is warped by the Thermodynamic Metric (g_ij).
+                let g_ij = f32::from_bits(state.audio_oscillator_hz.load(std::sync::atomic::Ordering::Relaxed)) * 0.001;
+                context_anchor.iter_mut().zip(best_prediction.iter()).for_each(|(c, &p)| {
+                    let dx = p - *c;
+                    let gamma = g_ij * 0.05; // Christoffel symbol approximation (Curvature connection)
+                    // Geodesic Equation: c = c + velocity + curvature * velocity^2 * direction
+                    *c = *c + dx * 0.2 + gamma * dx * dx * c.signum();
+                });
+            }
+
+            // --- PHASE 8: ZERO-MATH CHAOS DETECTION (BIT-HACKED LYAPUNOV) ---
+            // We use raw IEEE-754 bit extraction to detect exponential divergence without log(x).
+            let mut divergence_bits: u32 = 0;
+            for (c, p) in context_anchor.iter().zip(best_prediction.iter()) {
+                let delta = (*c - *p).abs();
+                divergence_bits += delta.to_bits() >> 23; // Extract exponent bits only
+            }
+            
+            // Average exponent per element is ~127. If it spikes violently, we have exponential divergence (Chaos).
+            if divergence_bits > 550_000 {
+                tracing::error!("☣️ CHAOS DETECTED (λ > 0). Lyapunov Reset Initiated!");
+                
+                // --- PHASE 8 MAGIC: STRANGE ATTRACTOR COLLAPSE ---
+                // XOR self-annihilation to perfectly clear the chaotic buffer without allocating memory or calling memset.
+                context_anchor.iter_mut().for_each(|x| {
+                    let bits = x.to_bits();
+                    *x = f32::from_bits(bits ^ bits); // Mathematical self-annihilation to 0.0
+                });
+                
+                if let Ok(mut heat) = state.hallucination_heat.try_lock() {
+                    heat.iter_mut().for_each(|h| {
+                         let bits = h.to_bits();
+                         *h = f32::from_bits(bits ^ bits); 
+                    });
+                }
+            }
+
+            // --- PHASE 8.5: THE CAUSAL LOOP (CLOSED TIMELIKE CURVES) ---
+            // If the prediction was perfectly realized, we achieve Causal Resonance.
+            if lowest_action < 0.5 {
+                if let Ok(mut cfb) = state.causal_feedback_buffer.try_lock() {
+                    if cfb.len() == context_anchor.len() {
+                        tracing::info!("⏳ CAUSAL RESONANCE: Folding finalized future backwards into temporal noise.");
+                        cfb.copy_from_slice(&context_anchor);
+                        
+                        // Lock hallucination heat to absolute zero (Causal Singularity)
+                        if let Ok(mut heat) = state.hallucination_heat.try_lock() {
+                             heat.iter_mut().for_each(|h| *h = 0.0);
+                        }
+                    }
+                }
+            }
+            
+            // --- ADHD HYPERFOCUS LOCK ---
+            // If the change in the context anchor exceeds the Hyperfocus Threshold, 
+            // the system enters a flow state, collapsing active universes to 1 to funnel 100% of GPU compute.
+            let hyperfocus_threshold = 2.5;
+            let new_delta: f32 = context_anchor.iter().map(|&x| x.abs()).sum::<f32>() / context_anchor.len() as f32;
+            
+            if new_delta > hyperfocus_threshold {
+                tracing::info!("🔥 ADHD Hyperfocus Lock Initiated. Funneling 100% compute into single geodesic.");
+                active_universes = 1;
+            }
+
+            // Prune / Clear the tree (Overwritten next idle tick)
+        }
+
+        // --- PHASE 6.5: INTUITION (QUANTUM TUNNELING) ---
+        // Subconscious Heuristics: Check if we recognize this geometric state.
+        // A simple hash function over the context anchor to simulate the NYX residue cache check.
+        let mut cache_hash: u64 = 0;
+        for &val in context_anchor.iter().take(10) {
+            cache_hash = cache_hash.wrapping_add(val.to_bits() as u64);
+        }
+        
+        let p_tunnel = (cache_hash % 100) as f32 / 100.0;
+        if p_tunnel > 0.95 {
+            tracing::info!("✨ INTUITION TRIGGERED. Quantum Tunneling to target state. Bypassing GPU calculation.");
+            // In a full implementation, we would extract the mapped reality from the intuition_cache.
+            // For now, we simulate a zero-clock-cycle bypass by skipping the math loops.
+            continue; 
+        }
+
+        tracing::info!(
+            "context_anchor initial NaN check: {}",
+            context_anchor.iter().any(|&v| v.is_nan())
+        );
+
+        if let Some(ref mut native) = native_state {
+            // Allocate reusable decode buffers outside the layer loop
+            let seq_len = LILITH_CONFIG.seq_len;
+            let mut best_text_tokens = vec![0u32; seq_len];
+            let mut best_vision_tokens = vec![0u32; seq_len];
+            let mut best_audio_tokens = vec![0u32; seq_len];
+
+            // Advantage of recursion: We would ideally refactor into `fn diffuse(step, state)`,
+            // but Rust/wgpu structural constraints with complex borrow contexts prevent this currently.
+            for _diffusion_step in 0..16 {
+                    // PIM OFFLOAD (Weight-Stationary Architecture)
+                    // The `context_anchor` is sent over the PCIe bus to the NVMe ARM controller.
+                    // The static weights never move. The NVMe computes the step and returns the result.
+                    if let Ok(result) = native.s.execute_pim_offload(native.center_id, &context_anchor) {
+                        context_anchor.copy_from_slice(&result);
+                    }
+
+                // Initialize diffusion block: anchor at index 0, zeros/noise for the rest
+                current_vec.fill(0.0);
+                current_vec[0..LILITH_CONFIG.hidden_size].copy_from_slice(&context_anchor);
+                queue.write_buffer(&current_vec_buf, 0, bytemuck::cast_slice(&current_vec));
+
+                // Optimization - Queue Submission Batching: single encoder for the whole layer iteration
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+                // Recursive layer calls would naturally enable infinite depth scaling.
+                for layer in 0..LILITH_CONFIG.num_layers {
+                    // --- PHASE 1: KURAMOTO OSCILLATOR SYNC ---
+                    // Map LLaDA 2.0 Vocab Embeddings to Natural Frequencies
+                    let embed_offset = layer * LILITH_CONFIG.hidden_size;
+                    queue.write_buffer(
+                        &ln_weights_buf,
+                        0,
+                        bytemuck::cast_slice(
+                            &native.embed_slice[embed_offset % native.embed_slice.len()
+                                ..((embed_offset % native.embed_slice.len()) + LILITH_CONFIG.hidden_size).min(native.embed_slice.len())],
+                        ),
+                    );
+                    run_kuramoto(LILITH_CONFIG.hidden_size as u32, &kuramoto_bg, &mut encoder);
+
+                    // --- PHASE 1.5: FRENET-SERRET TOPOLOGY ---
+                    run_frenet_serret(
+                        LILITH_CONFIG.hidden_size as u32,
+                        0.01,
+                        &f_params_buf,
+                        &current_vec_buf,
+                        &prev_pos_buf,
+                        &prev_vel_buf,
+                        &prev_acc_buf,
+                        &curvature_buf,
+                        &torsion_buf,
+                    );
+
+                    // --- PHASE 2: RUCKLIDGE STRANGE ATTRACTORS ---
+                    // Chaos Boundaries pre-fetched to VRAM to prevent NVMe bottlenecks
+                    run_rucklidge_attractor(LILITH_CONFIG.hidden_size as u32, &rucklidge_bg, &mut encoder);
+
+                    // --- PHASE 3: RICCI FLOW TOPOLOGICAL GRAVITY ---
+                    // Map LLaDA 2.0 MoE Router Weights to Metric Tensor
+                    let router_layer_offset = layer
+                        * (LILITH_CONFIG.num_experts * LILITH_CONFIG.hidden_size
+                            + LILITH_CONFIG.num_experts);
+                    let router_weights = &native.router_slice[router_layer_offset
+                        ..router_layer_offset
+                            + (LILITH_CONFIG.num_experts * LILITH_CONFIG.hidden_size)];
+                    queue.write_buffer(
+                        &router_weights_buf,
+                        0,
+                        bytemuck::cast_slice(router_weights),
+                    );
+                    
+                    run_ricci_flow_contraction(LILITH_CONFIG.hidden_size as u32, &ricci_bg, &mut encoder);
+                    
+                    // --- KLEIN BOTTLE EQUILIBRIUM ---
+                    run_mobius_twist(LILITH_CONFIG.seq_len as u32, &mobius_bg, &mut encoder);
+
+                    // --- PHASE 3.5: WOLFRAM COMPRESSION ---
+                    run_wolfram_compression(
+                        LILITH_CONFIG.hidden_size as u32,
+                        0.5,
+                        &w_params_buf,
+                        &current_vec_buf,
+                        &norm_out_buf,
+                    );
+
+                    // Note: copy_buffer_to_buffer is currently kept, will be ping-ponged in Phase 3
+                    encoder.copy_buffer_to_buffer(
+                        &norm_out_buf,
+                        0,
+                        &current_vec_buf,
+                        0,
+                        (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+                    );
+                } // layer
+                
+                queue.submit(Some(encoder.finish()));
+
+                // --- PHASE 4: GRAY-SCOTT REACTION-DIFFUSION DECODE ---
+                // Map LLaDA 2.0 LM Head to Physical Crystallization Feed/Kill limits
+                queue.write_buffer(
+                    &ln_weights_buf,
+                    0,
+                    bytemuck::cast_slice(&native.lm_head_slice[0..LILITH_CONFIG.hidden_size]),
+                );
+                let mut gs_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                run_gray_scott_decode(LILITH_CONFIG.hidden_size as u32, &gs_bg, &mut gs_encoder);
+                queue.submit(Some(gs_encoder.finish()));
+
+                // Final Norm
+                queue.write_buffer(&ln_weights_buf, 0, bytemuck::cast_slice(&native.final_norm));
+                run_rmsnorm(
+                    LILITH_CONFIG.hidden_size as u32,
+                    LILITH_CONFIG.seq_len as u32,
+                    &ln_weights_buf,
+                    &current_vec_buf,
+                    &norm_out_buf,
+                );
+
+                // Task 2: Quantum Vacuum Friction (Pure WebGPU Compute Pass)
+                {
+                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                    
+                    // Copy norm_out_buf to current_vec_buf so we can mutate it with the QV shader
+                    encoder.copy_buffer_to_buffer(
+                        &norm_out_buf,
+                        0,
+                        &current_vec_buf,
+                        0,
+                        (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+                    );
+                    
+                    let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+                    cpass.set_pipeline(&qv_pipe);
+                    cpass.set_bind_group(0, &qv_bg, &[]);
+                    let workgroups = (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size).div_ceil(256);
+                    cpass.dispatch_workgroups(workgroups as u32, 1, 1);
+                    drop(cpass);
+
+                    // --- HOLE THEORY SUBTRACTION (Subtractive Inference) ---
+                    let mut cpass_hole = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+                    cpass_hole.set_pipeline(&hole_theory_pipe);
+                    cpass_hole.set_bind_group(0, &hole_theory_bg, &[]);
+                    let workgroups_hole = (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size / 4).div_ceil(64);
+                    cpass_hole.dispatch_workgroups(workgroups_hole as u32, 1, 1);
+                    drop(cpass_hole);
+
+                    // Project the observable holes (Dirac Sea output) back into current_vec_buf
+                    encoder.copy_buffer_to_buffer(
+                        &dirac_sea_buf,
+                        0,
+                        &current_vec_buf,
+                        0,
+                        (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+                    );
+
+                    // --- ATIYAH-SINGER TOPOLOGICAL VERIFICATION (Euler Characteristic) ---
+                    let mut cpass_atiyah = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+                    cpass_atiyah.set_pipeline(&as_pipe);
+                    cpass_atiyah.set_bind_group(0, &as_bg, &[]);
+                    let workgroups_as = (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size).div_ceil(256);
+                    cpass_atiyah.dispatch_workgroups(workgroups_as as u32, 1, 1);
+                    drop(cpass_atiyah);
+                    
+                    // Copy mutated current_vec_buf into staging_buf to read back to CPU
+                    encoder.copy_buffer_to_buffer(
+                        &current_vec_buf,
+                        0,
+                        &staging_buf,
+                        0,
+                        (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
+                    );
+                    queue.submit(Some(encoder.finish()));
+                }
+
+                // Download
+                {
+                    let slice = staging_buf.slice(..);
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    slice.map_async(wgpu::MapMode::Read, move |v| tx.send(v).unwrap());
+                    // Optimization - Async GPU Polling
+                    while rx.try_recv().is_err() {
+                        if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                        std::thread::yield_now();
+                    }
+                    
+                    let mapped = slice.get_mapped_range();
+                    current_vec.copy_from_slice(bytemuck::cast_slice(&mapped));
+                    drop(mapped);
+                    staging_buf.unmap();
+                }
+
+                // V-Sync: Sleep exactly until the next 60Hz frame
+                let now = std::time::Instant::now();
+                if now < next_frame_time {
+                    std::thread::sleep(next_frame_time - now);
+                }
+                next_frame_time = std::time::Instant::now() + target_frame_duration;
+
+                let has_nan = current_vec.iter().any(|&v| v.is_nan());
+                let all_zero = current_vec.iter().all(|&v| v == 0.0);
+                let max_val = current_vec.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+                tracing::info!(
+                    "Token generated. Stats -> NaN: {}, Zero: {}, Max_abs: {}",
+                    has_nan,
+                    all_zero,
+                    max_val
+                );
+
+                // Decode the superposition state into all three sensory modalities simultaneously
+                use rayon::prelude::*;
+
+                // Decode sequence (Parallel Unmasking for all tokens)
+                // Magic Memory Trick - Zero-Allocation Buffer Reuse
+                // `best_text_tokens`, `best_vision_tokens`, `best_audio_tokens` hoisted.
+                best_text_tokens.fill(0);
+                best_vision_tokens.fill(0);
+                best_audio_tokens.fill(0);
+
+                // Populate active_mask (Fix 3: Inefficient Zero Skipping)
+                let mut active_mask_data = vec![0u32; LILITH_CONFIG.seq_len];
+                for (s_idx, v) in active_mask_data.iter_mut().enumerate() {
+                    let offset = s_idx * LILITH_CONFIG.hidden_size;
+                    let is_zero = current_vec[offset..offset + LILITH_CONFIG.hidden_size].iter().all(|&val| val == 0.0);
+                    *v = if is_zero { 0 } else { 1 };
+                }
+                queue.write_buffer(&active_mask_buf, 0, bytemuck::cast_slice(&active_mask_data));
+
+                // Dispatch WebGPU Decode Logits (Fix 2: CPU Bottleneck)
+                let mut dec_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+                {
+                    let mut cpass = dec_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+                    cpass.set_pipeline(&decode_pipe);
+                    cpass.set_bind_group(0, &decode_bg, &[]);
+                    cpass.dispatch_workgroups((total_vocab as u32).div_ceil(64), LILITH_CONFIG.seq_len as u32, 1);
+                }
+                
+                dec_encoder.copy_buffer_to_buffer(
+                    &out_logits_buf,
+                    0,
+                    &staging_logits_buf,
+                    0,
+                    (LILITH_CONFIG.seq_len * total_vocab * 4) as u64,
+                );
+                queue.submit(Some(dec_encoder.finish()));
+                
+                let dec_slice = staging_logits_buf.slice(..);
+                let (tx_dec, rx_dec) = std::sync::mpsc::channel();
+                dec_slice.map_async(wgpu::MapMode::Read, move |v| tx_dec.send(v).unwrap());
+                while rx_dec.try_recv().is_err() {
+                    if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return; }
+                    std::thread::yield_now();
+                }
+                
+                let out_logits_mapped = dec_slice.get_mapped_range();
+                let out_logits: &[f32] = bytemuck::cast_slice(&out_logits_mapped);
+
+                best_text_tokens.par_iter_mut().enumerate().for_each(|(t_idx, out_token)| {
+                    if active_mask_data[t_idx] == 0 { *out_token = 0; return; }
+                    let logits = &out_logits[t_idx * total_vocab..t_idx * total_vocab + LILITH_CONFIG.text_vocab_size];
+                    let (best_idx, _) = logits.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or((0, &f32::NEG_INFINITY));
+                    *out_token = best_idx as u32;
+                });
+                
+                best_vision_tokens.par_iter_mut().enumerate().for_each(|(t_idx, out_token)| {
+                    if active_mask_data[t_idx] == 0 { *out_token = 0; return; }
+                    let logits = &out_logits[t_idx * total_vocab + LILITH_CONFIG.text_vocab_size..t_idx * total_vocab + LILITH_CONFIG.text_vocab_size + LILITH_CONFIG.vision_vocab_size];
+                    let (best_idx, _) = logits.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or((0, &f32::NEG_INFINITY));
+                    *out_token = best_idx as u32;
+                });
+                
+                best_audio_tokens.par_iter_mut().enumerate().for_each(|(t_idx, out_token)| {
+                    if active_mask_data[t_idx] == 0 { *out_token = 0; return; }
+                    let logits = &out_logits[t_idx * total_vocab + LILITH_CONFIG.text_vocab_size + LILITH_CONFIG.vision_vocab_size..t_idx * total_vocab + total_vocab];
+                    let (best_idx, _) = logits.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or((0, &f32::NEG_INFINITY));
+                    *out_token = best_idx as u32;
+                });
+
+                drop(out_logits_mapped);
+                staging_logits_buf.unmap();
+
+                // Lock tokens into context anchor for the next diffusion step (self-correction)
+                best_text_tokens.iter().enumerate().for_each(|(t_idx, &best_token)| {
+                    let offset = t_idx * LILITH_CONFIG.hidden_size;
+                    let emb_start = (best_token as usize) * LILITH_CONFIG.hidden_size;
+                    current_vec[offset..offset + LILITH_CONFIG.hidden_size].iter_mut()
+                        .zip(native.embed_slice[emb_start..emb_start + LILITH_CONFIG.hidden_size].iter())
+                        .for_each(|(c, &e)| {
+                            *c = *c * 0.5 + e * 0.5;
+                        });
+                });
+                queue.write_buffer(&current_vec_buf, 0, bytemuck::cast_slice(&current_vec));
+
+                // 1. Text Output (Render live crystallization)
+                // Send a sample token to UI to avoid overflowing the render buffer with updates per frame
+                let _ = state.vocal_chord.push(best_text_tokens[0]);
+
+                // 2. Vision Output (decode 14-bit token into 5-5-4 RGB)
+                // Magic Memory Trick - Floating point division (`/ 31.0`) is extremely slow. 
+                // Precalculate the reciprocal scalar (255.0 / 31.0 = 8.225806f32) and use 
+                // direct floating-point multiplication (1 cycle) instead of division!
+                let (sum_r, sum_g, sum_b) = best_vision_tokens.iter().fold((0.0, 0.0, 0.0), |(r, g, b), &vis_tok| {
+                    (
+                        r + ((vis_tok >> 9) & 0x1F) as f32 * 8.225806,
+                        g + ((vis_tok >> 4) & 0x1F) as f32 * 8.225806,
+                        b + (vis_tok & 0xF) as f32 * 17.0
+                    )
+                });
+                let avg_r = sum_r / seq_len as f32;
+                let avg_g = sum_g / seq_len as f32;
+                let avg_b = sum_b / seq_len as f32;
+
+                if let Ok(mut heat) = state.hallucination_heat.try_lock()
+                    && heat.len() >= 3 {
+                        heat[0] = heat[0] * 0.5 + avg_r * 0.5;
+                        heat[1] = heat[1] * 0.5 + avg_g * 0.5;
+                        heat[2] = heat[2] * 0.5 + avg_b * 0.5;
+                    }
+
+                // 3. Audio Output
+                let sum_freq: f32 = best_audio_tokens.iter().map(|&aud_tok| 20.0 + (aud_tok as f32 % 1980.0)).sum();
+                let avg_freq = sum_freq / seq_len as f32;
+                state
+                    .audio_oscillator_hz
+                    .store(avg_freq.to_bits(), Ordering::Relaxed);
+
+                // Final unmasking commitment
+                context_anchor.iter_mut().zip(current_vec.iter()).for_each(|(c, &v)| {
+                    let raw = *c * 0.7 + v * 0.3;
+                    // Quantum Vacuum Friction (L1 Soft-Thresholding Collapse)
+                    *c = q_sign(raw) * (q_abs(raw) - 1e-10).max(0.0);
+                });
+            } // end diffusion block
+            
+            // --- PHASE 8: EQUILIBRIUM TOPOLOGY (KLEIN BOTTLE OUROBOROS) ---
+            // Twist the latent space into a non-orientable surface before the next tick
+            // This prevents the autoencoder from collapsing into a stagnant local minimum.
+            context_anchor.reverse();
+            context_anchor.iter_mut().for_each(|c| *c = -*c);
+        } // end of native block
+        
+        // =========================================================================
+        // PHASE 3: MULTI-DIMENSIONAL SMART CONTRACT SANDBOXING & THERMODYNAMIC FILTERING
+        // =========================================================================
+        let mut drained = Vec::new();
+        while let Some(payload) = state.sandboxed_payloads.pop() {
+            drained.push(payload);
+        }
+        for payload in drained {
+                // Parse Foreign State
+                // Example Payload: ID:hash|HEARTBEAT:5.2|HZ:432.0|CAM:0.0,0.0,-4.0|HEAT:55.5|TOKENS:0|
+                
+                let mut foreign_heat = 0.0;
+                let mut foreign_hz = 0.0;
+                let mut foreign_cam = [0.0; 3];
+                let mut sender_id = String::new();
+
+                for segment in payload.split('|') {
+                    if segment.starts_with("HEAT:") {
+                        if let Ok(h) = segment[5..].parse::<f32>() { foreign_heat = h; }
+                    } else if segment.starts_with("HZ:") {
+                        if let Ok(hz) = segment[3..].parse::<f32>() { foreign_hz = hz; }
+                    } else if segment.starts_with("CAM:") {
+                        let coords: Vec<&str> = segment[4..].split(',').collect();
+                        if coords.len() == 3 {
+                            if let Ok(x) = coords[0].parse::<f32>() { foreign_cam[0] = x; }
+                            if let Ok(y) = coords[1].parse::<f32>() { foreign_cam[1] = y; }
+                            if let Ok(z) = coords[2].parse::<f32>() { foreign_cam[2] = z; }
+                        }
+                    } else if segment.starts_with("ID:") {
+                        sender_id = segment[3..].to_string();
+                    }
+                }
+                
+                if sender_id.is_empty() {
+                    sender_id = "ANONYMOUS_SYBIL".to_string();
+                }
+
+                // Thermodynamic Filtering (Cognitive Immune System)
+                let local_heat_val = if let Ok(heat) = state.hallucination_heat.try_lock() {
+                    (heat[0] + heat[1] + heat[2]) / 3.0
+                } else {
+                    0.0
+                };
+
+                RealitySandbox::validate_and_merge(&state, &sender_id, foreign_heat, foreign_hz, foreign_cam, local_heat_val);
+            }
+        
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}

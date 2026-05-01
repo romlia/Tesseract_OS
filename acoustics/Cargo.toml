@@ -1,0 +1,13 @@
+[package]
+name = "prismatic-acoustics"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+prismatic-core = { path = "../core" }
+cpal.workspace = true
+
+crossbeam.workspace = true
+rtrb.workspace = true
+anyhow.workspace = true
+tracing.workspace = true

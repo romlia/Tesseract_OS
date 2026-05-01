@@ -1,0 +1,16 @@
+{
+  "hidden_size": 2048,
+  "seq_len": 128,
+  "text_vocab_size": 157184,
+  "vision_vocab_size": 16384,
+  "audio_vocab_size": 43392,
+  "qkv_size": 3072,
+  "ffn_size": 5120,
+  "kv_offset": 2048,
+  "v_offset": 2560,
+  "head_dim": 128,
+  "num_heads": 16,
+  "num_kv_heads": 4,
+  "num_layers": 20,
+  "num_experts": 256
+}

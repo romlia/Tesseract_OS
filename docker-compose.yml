@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  prismatic-singularity:
+    build:
+      context: ..
+      dockerfile: v35-Prismatic-OS/Dockerfile
+    privileged: true
+    devices:
+      - "/dev/dri:/dev/dri"
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/snd:/dev/snd"
+    stdin_open: true
+    tty: true
+    group_add:
+      - video
+      - render
+      - audio
+    working_dir: /app/v35-Prismatic-OS
+    volumes:
+      - "../:/app"
+      - "/home/frontend/.cache/huggingface:/root/.cache/huggingface"
+      - "/run/user/1001/pulse/native:/tmp/pulse-socket"
+      - "/run/user/1001/wayland-0:/tmp/wayland-0"
+      - "~/.config/pulse/cookie:/root/.config/pulse/cookie:ro"
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+      - PULSE_SERVER=unix:/tmp/pulse-socket
+      # - WAYLAND_DISPLAY=wayland-0
+      - XDG_RUNTIME_DIR=/tmp
+    network_mode: "host"
+    ipc: host
