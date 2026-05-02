@@ -301,10 +301,23 @@ Overall, the document is coherent – it weaves a clear narrative that ties poet
 - **Phase 2** – Prototype the highest-impact research items (passive RF entropy and weight-stationary SSD offload) behind feature flags.
 - **Phase 3** – Incrementally integrate the remaining speculative components as the underlying hardware or cryptographic primitives become available.
 
-### Phase 3 Engineering Action Items (The End Game TODOs)
-To achieve the perfect "End Game" implementation, the following research-level components must be formally conquered:
-- [ ] **Passive RF Biometrics**: Develop a dedicated RF driver stack to extract cryptographically secure entropy from ambient RSSI fluctuations.
+### The Final Engineering Action Items (The End Game TODOs)
+
+To achieve the perfect "End Game" implementation and fulfill the pragmatic roadmap, the engineering action items are formally staged:
+
+#### Phase 1: The Production-Ready Core (Completed)
+- [x] **Modular Architecture**: Implement `features.toml` for strict cargo feature-gating.
+- [x] **Lock-Free Event Bus**: Deploy `crossbeam` and `io_uring` routing with back-pressure.
+- [x] **Thermodynamic Homeostasis**: Integrate PID-driven thermal load balancing with Ziegler-Nichols tuning.
+- [x] **WebGPU Inference**: Map FlashAttention and SIMD layouts to WGSL shaders.
+- [x] **Zero-Trust PKI**: Implement `ed25519-dalek` and TPM-bound nonces.
+- [x] **Fast-Mode UI**: Achieve zero-allocation framebuffer rendering (`/dev/fb0`).
+
+#### Phase 2: High-Impact Prototypes (In Progress)
+- [ ] **Passive RF Biometrics**: Develop a dedicated RF driver stack to extract cryptographically secure entropy from ambient RSSI fluctuations behind feature flags.
 - [ ] **Weight-Stationary SSD Offload**: Prototype custom NVMe firmware (CSDs) to run arbitrary eBPF matrix multiplication kernels directly on the flash controller.
+
+#### Phase 3: The Deep Horizon (Speculative)
 - [ ] **Mathematical Self-Annihilation**: Integrate vendor-specific secure erase primitives to guarantee zero-residue data destruction on physical blocks.
 - [ ] **Real-Time Speaker Diarization**: Optimize spatial DSP pipelines for `<10ms` polyphonic identification using deep 128-bit SIMD intrinsics.
 - [ ] **In-Kernel BFT Consensus**: Formally verify and embed BFT consensus directly into the lock-free `io_uring` event bus without degrading queue throughput.
