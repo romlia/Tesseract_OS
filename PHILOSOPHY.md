@@ -305,7 +305,12 @@ These items are promising but would require either new silicon (e.g., computatio
 - **Phase 3 – Long-term research horizon**: Work with hardware vendors on computational-storage firmware and secure-erase primitives. Publish academic work on sub-10 ms SIMD speaker diarization and kernel-level BFT consensus. Develop a zero-knowledge biometric staking protocol and integrate it once the underlying entropy sources are proven.
 
 ### Overall Assessment
-The philosophy and engineering plan are coherent and well-structured. The core production pieces are already feasible with today’s toolchain. The more speculative, “hardware-research-horizon” components are ambitious but not yet realizable without new hardware or deeper research.
+
+The core production-ready components (feature-gating, lock-free event bus, PID-based thermal control, WebGPU FlashAttention, PKI, fast-mode framebuffer UI, and the CI test matrix) are all feasible with today’s hardware and can be shipped now.
+
+Phase 2 items—passive RF-entropy, SSD-side eBPF compute offload, gossip-based reputation, thermal-metric propagation, the `/dev/membrane` publish gateway, and the hybrid PID/ML tuner—are each viable prototypes but still require research, hardware-specific work, or integration effort before they become production-grade.
+
+Phase 3 concepts (weight-stationary PIM, mathematical self-annihilation, zero-knowledge biometric staking, ultra-low-latency speaker diarization, in-kernel BFT) remain speculative and will need new firmware, custom silicon, or substantial algorithmic breakthroughs.
 
 ### The Final Engineering Action Items (The End Game TODOs)
 
