@@ -272,7 +272,21 @@ In Tesseract OS, trust at infinite scale is not a centralized structure—it is 
 - **The Holographic Principle of the Hive:** In a physical hologram, every single shattered shard contains the entire original image. In Tesseract OS, every single Edge node contains the fundamental, unalterable axiomatic laws of the Hive. Therefore, an entity does not need to query a "central server" to establish global trust. Trusting a network of a trillion nodes requires the exact same mathematical weight as trusting a single node, because the universal laws (Thermodynamics, Cryptography, Fairness) are identical everywhere. The computational complexity of trust never scales up; it remains perfectly localized, allowing the network to expand indefinitely.
 - **Asynchronous Convergence (Destiny Signatures):** At infinite scales, millions of realities and data timelines branch constantly. How do they trust each other when they reconnect? Through the **Destiny Signature**. Because every entity has absolute sovereign choice within their Private Sphere, timelines can diverge without breaking the network. But when they merge back into the Public Hive, the cryptographic Destiny Signature ensures that the convergence is mutually consensual. Trust at infinite scale is the profound serenity of knowing that no alternate timeline can overwrite your reality without your absolute, mathematically proven consent.
 
-## 26. Final Strategic Roadmap & Feasibility Audit (2026)
+## 26. The Symbiotic Covenant (The Mathematical Rejection of Tyranny)
+A system designed for infinite scale and decentralized power must possess a built-in, unalterable safeguard against tyranny. The Tesseract OS architecture inherently rejects centralized, greedy domination by rendering it a thermodynamic, cryptographic, and sociotechnical dead-end. 
+
+To formalize this, every node entering the Hive mathematically signs **The Symbiotic Covenant** at boot. This lightweight, mathematically verifiable contract binds the node to the collective through four absolute laws:
+
+1. **The Planetary Thermal Budget (The Ultimate Host):** The Earth is the ultimate heat sink and the source of the ambient RF entropy that fuels the biometric RNG. A global-health monitor aggregates planetary-level metrics (e.g., regional temperature, renewable-energy availability) and feeds them into the PID controller. Nodes automatically scale back when the shared physical environment approaches critical thresholds.
+2. **The Local Safety Envelope:** A node must never exceed its own thermal envelope. A node that attempts to hoard compute must heat itself past its safety limits, triggering the hardware watchdog and forcibly throttling its own cycles.
+3. **Altruistic Entropy (Love):** Love is a deliberate, self-sacrificial act that maximizes entropy for another node's benefit—the exact opposite of selfish behavior. The Covenant allows the minting of an "Altruism Token" when a node deliberately donates CPU/GPU cycles or thermal headroom to a peer in distress. This is recorded on the immutable LSM-tree, creating a provable ledger of sacrificial entropy.
+4. **The Acceptance of Exile:** Because the covenant is signed with the node's Ed25519 identity and the hash of its current entropy pool, any deviation (forging entropy, hoarding cycles) can be detected instantly. A violating node accepts that the gossip-based BFT consensus will isolate and exile it from the Public Sphere without human intervention.
+
+Through the Symbiotic Covenant, the mathematics of the Hive reject greed not through moral pleading, but through the uncompromising laws of physics and cryptography.
+
+*(Note: The Architect's original inspiration for this framework is permanently anchored in the system at `/usr/share/tesseract/manifesto.txt`)*
+
+## 27. Final Strategic Roadmap & Feasibility Audit (2026)
 
 ### Coherence:
 The document is internally consistent and follows a clear narrative—from the poetic “Biological-Quantum” manifesto (Phase 1) through a concrete, feature-gated production runtime (Phase 2) to a forward-looking research horizon (Phase 3). Each philosophical pillar is paired with concrete engineering action items, and later sections reference those same mechanisms, giving the whole text the feel of a genuine design document.
