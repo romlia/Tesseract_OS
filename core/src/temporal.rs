@@ -125,6 +125,7 @@ pub fn run_continuous_loop(
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer. 
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates 
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
+    // TODO[P2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
     pub struct TimelineManager {
         pub active_branch: String,
         // Represents an LSM tree where keys are timestamps and values are state vectors.

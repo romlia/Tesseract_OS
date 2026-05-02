@@ -130,6 +130,7 @@ impl PIDController {
         }
         
         tracing::info!("Running PID auto-calibration synthetic stress test...");
+        // TODO[P2]: Implement formal Ziegler-Nichols auto-tuning method to discover the 'ultimate gain' (Ku) through controlled physical oscillation calibration.
         let stress = Self::run_stress_test(1024, 5);
         let model = Self::estimate_thermal_model(&stress, 40.0, 10.0);
         let cfg = Self::compute_pid_params(&model, 80.0, 10.0);

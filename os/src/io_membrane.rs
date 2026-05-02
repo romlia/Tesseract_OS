@@ -7,7 +7,6 @@ use prismatic_core::GlobalContext;
 /// Wraps all external drive reads in the Social Contract Operator and BloomFilter verification.
 // Memory Space Segregation (Hardware-level memory isolation utilizing ARM TrustZone or Intel SGX between PrivateInferenceEngine and SwarmRouter)
 // Explicit Publish Gateway (A unified /dev/membrane character device. Data crossing from Private to Public sphere must be written here, triggering biometric prompt)
-// TODO[P3]: Implement Yin-Yang Membrane biometric proof-of-life staking before crossing into the Public Sphere.
 
 pub struct HardwareEnclave {
     // Represents a TrustZone or SGX secure enclave
@@ -53,7 +52,6 @@ impl CryptographicVfs {
         
         if !is_trusted {
             // Mathematical Self-Annihilation (Phase 11)
-            // TODO[P4]: Research standard hardware-level primitives or custom ATA/NVMe commands for true zero-residue data self-annihilation.
             buffer.iter_mut().for_each(|b| *b = 0);
             return false; // Quarantine
         }

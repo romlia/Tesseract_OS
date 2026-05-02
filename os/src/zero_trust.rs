@@ -79,6 +79,7 @@ pub struct YinYangMembrane;
 impl YinYangMembrane {
     pub fn get_staking_entropy(&self, entropy_pool: &[u8]) -> [u8; 32] {
         // Cryptographic RNG for Biological Staking (Mock ChaCha20 DRBG seeded by RF + TPM)
+        // TODO[P3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
         crate::crypto::tesseract_hash(entropy_pool)
     }
     pub fn crystallize(ledger: &mut ZeroTrustLedger, private_freewheel: &[f32], public_truth: &mut [f32]) -> bool {
@@ -99,6 +100,7 @@ impl YinYangMembrane {
             true
         } else {
             // The swarm rejects the chaos. The user is slashed.
+            // TODO[P3]: Implement true mathematical self-annihilation (custom NVMe secure erase) of the untrusted payload to guarantee zero residue.
             ledger.biological_credit = 0.0;
             tracing::error!("CHAOS REJECTED BY PUBLIC SPHERE. Biological Credit Slashed to 0.0.");
             false
@@ -179,6 +181,7 @@ impl ZeroTrustLedger {
 
     // Passive RF-Sensing for Doppler Heartbeat Extraction
     pub fn harvest_biological_rhythm(&mut self) {
+        // TODO[P3]: Extract cryptographically secure entropy from ambient RF (Wi-Fi/Bluetooth) RSSI variance.
         // Bandwidth Swing: Non-intrusively read /proc/net/wireless
         // MAGIC TRICK: Zero-Allocation Procfs Heartbeat
         // Safety Net: If `/proc/net/wireless` does not exist, use a pseudo-random fallback 
@@ -355,6 +358,7 @@ impl ZeroTrustLedger {
         tokenizer: &Tokenizer,
     ) {
         // Biometric Keystroke Entropy Synthesis
+        // TODO[P3]: Extract highly reliable entropy from keystroke inter-arrival variance.
         self.entropy_pool.extend_from_slice(&(text.len() as u64).to_le_bytes());
         
         if text.contains("<EXECUTE:Konsole>") {
