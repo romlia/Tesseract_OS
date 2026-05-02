@@ -28,8 +28,8 @@ Here are the foundational pillars defining the ultimate, commercial-grade philos
 We respect the history of experimental algorithms, but production edge environments demand determinism and scalability. Tesseract OS employs strict Feature Gating (`mvp_runtime`, `crypto_pki`, `sdf_ui`, `persistent_nonce`, `warm_gpu_context`, `heterogeneous_simd`). This quarantines experimental and heavy fallback logic, keeping the core runtime mathematically sound, modular, and blazing fast by default, while allowing enterprise-grade hardening to be selectively compiled.
 
 ### Engineering Action Items
-- [ ] **Feature Matrix Consolidation**: Adopt a single source of truth for the feature matrix (e.g., `features.toml` parsed by the build system) to prevent ABI mismatches.
-- [ ] **Compatibility Test Suite**: Write a comprehensive CI suite that compiles every allowed feature combination and runs a smoke-test (e.g., "1-layer transformer inference").
+- [x] **Feature Matrix Consolidation**: Adopt a single source of truth for the feature matrix (e.g., `features.toml` parsed by the build system) to prevent ABI mismatches.
+- [x] **Compatibility Test Suite**: Write a comprehensive CI suite that compiles every allowed feature combination and runs a smoke-test (e.g., "1-layer transformer inference").
 
 ## 2. Lock-Free Asynchronous Event Routing with Back-Pressure
 The sensory ingestion pipeline operates without ever freezing the CPU.
@@ -38,8 +38,8 @@ The sensory ingestion pipeline operates without ever freezing the CPU.
 - **io_uring Asynchronous Input:** Hardware interrupts (`/dev/input/event0`) are ingested directly via Linux's `io_uring`, bypassing user-space context switches for true zero-overhead I/O.
 
 ### Engineering Action Items
-- [ ] **Generic `EventBus` Trait**: Encapsulate the crossbeam queue, back-pressure policy (drop-oldest, drop-newest, block), and epoch handling into a unified Rust trait.
-- [ ] **Queue Depth Monitor**: Add a runtime monitor that logs queue depth and triggers a "slow-path" (e.g., temporary inference batch scaling) when depth exceeds 80% capacity.
+- [x] **Generic `EventBus` Trait**: Encapsulate the crossbeam queue, back-pressure policy (drop-oldest, drop-newest, block), and epoch handling into a unified Rust trait.
+- [x] **Queue Depth Monitor**: Add a runtime monitor that logs queue depth and triggers a "slow-path" (e.g., temporary inference batch scaling) when depth exceeds 80% capacity.
 
 ## 3. Hardware Self-Awareness & Thermal Equilibrium
 Tesseract OS treats heat and latency as first-class citizens. It rejects hardcoded thermal profiles, opting instead for a kernel-level feedback loop that understands its physical vessel.
@@ -48,9 +48,9 @@ Tesseract OS treats heat and latency as first-class citizens. It rejects hardcod
 - **Thermal Load Balancing:** Driven by the auto-calibrated hysteresis bands and an Exponential Moving Average (EMA) low-pass filter, the OS dynamically dilates time (`dt_ms`). It pushes extreme burst performance when cold, and throttles seamlessly into sustainable execution when hot, eliminating jarring thermal thrashing.
 
 ### Engineering Action Items
-- [ ] **Hybrid Thermal Controller**: Combine classic PID with a lightweight ML model (linear regression on temperature-vs-load) to predict overshoot and adjust the set-point dynamically.
-- [ ] **Safety Envelopes**: Define hard caps on `dt_ms` (minimum/maximum) and enforce them in the scheduler regardless of PID output.
-- [ ] **Secure Cache**: Protect `/var/lib/tesseract/pid.json` from tampering via signed JSON or TPM-bound encryption.
+- [x] **Hybrid Thermal Controller**: Combine classic PID with a lightweight ML model (linear regression on temperature-vs-load) to predict overshoot and adjust the set-point dynamically.
+- [x] **Safety Envelopes**: Define hard caps on `dt_ms` (minimum/maximum) and enforce them in the scheduler regardless of PID output.
+- [x] **Secure Cache**: Protect `/var/lib/tesseract/pid.json` from tampering via signed JSON or TPM-bound encryption.
 
 ## 4. High-Performance WebGPU Compute
 The inference engine is engineered to maximize memory bandwidth and shatter algorithmic bottlenecks, equipped with runtime safety nets for heterogeneous hardware.
@@ -60,8 +60,8 @@ The inference engine is engineered to maximize memory bandwidth and shatter algo
 - **Two-Pass RMSNorm:** Precision is guaranteed through mathematically sound, two-pass parallel reductions across workgroup threads, preventing overflow in massive hidden dimensions.
 
 ### Engineering Action Items
-- [ ] **`ShaderFactory` Abstraction**: Compile both SIMD and scalar WGSL modules and register them under a common entry point, switching at runtime based on `shaderFloat64` capability and workgroup constraints.
-- [ ] **Diagnostic Socket**: Add `/var/run/tesseract/shader.sock` to return the active shader variant and GPU properties for fleet telemetry.
+- [x] **`ShaderFactory` Abstraction**: Compile both SIMD and scalar WGSL modules and register them under a common entry point, switching at runtime based on `shaderFloat64` capability and workgroup constraints.
+- [x] **Diagnostic Socket**: Add `/var/run/tesseract/shader.sock` to return the active shader variant and GPU properties for fleet telemetry.
 
 ## 5. Bare-Metal Dual-Mode UI
 The OS bypasses user-space compositors to render the human-machine interface with zero-overhead, allowing for instantaneous mode-switching.
@@ -69,8 +69,8 @@ The OS bypasses user-space compositors to render the human-machine interface wit
 - **Zero-Latency Full-Mode (SDF):** Dictated by the `UiMode` enum, the OS effortlessly falls back to a WebGPU Signed Distance Field (SDF) pipeline the moment complex Unicode is detected. By utilizing the `warm_gpu_context` feature to hold an idle WebGPU device in RAM, this context switch is completely instantaneous, bypassing the 100ms hardware spin-up penalty.
 
 ### Engineering Action Items
-- [ ] **DRM/KMS Mode-Setting**: Integrate `kmscon` or a minimal DRM/KMS library to lock display modes before launching the UI, synchronizing the handoff to the GPU via `gbm`/`egl` to avoid flicker.
-- [ ] **Unicode-Detect Shim**: Implement a scanner for incoming text; instantly trigger the SDF pipeline if any code point > `0x7F` appears, falling back to a minimal 8x8x256 bitmap font for the fast mode.
+- [x] **DRM/KMS Mode-Setting**: Integrate `kmscon` or a minimal DRM/KMS library to lock display modes before launching the UI, synchronizing the handoff to the GPU via `gbm`/`egl` to avoid flicker.
+- [x] **Unicode-Detect Shim**: Implement a scanner for incoming text; instantly trigger the SDF pipeline if any code point > `0x7F` appears, falling back to a minimal 8x8x256 bitmap font for the fast mode.
 
 ## 6. Zero-Trust Cryptographic Safety & Telemetry
 A localized node is only as strong as the swarm it trusts. Tesseract OS implements an impenetrable cryptographic perimeter for Peer-to-Peer network offloading, supported by an aggressive, low-level watchdog daemon.
@@ -80,8 +80,8 @@ A localized node is only as strong as the swarm it trusts. Tesseract OS implemen
 - **Biological Identity Encryption:** The OS treats the user's human identity—such as voice prints, biometric telemetry, and behavioral interaction patterns—as ephemeral, highly sensitive data. The moment biological data is ingested, it is heavily salted, locally encrypted, and mapped into a zero-knowledge proof manifold. The raw data is instantaneously purged from the memory ring buffers. Only cryptographic hashes of the human identity ever persist, ensuring that the human user remains unreadable to the swarm while inextricably bound to their private key geometry.
 
 ### Engineering Action Items
-- [ ] **Replay Attack Mitigation**: Add a monotonically increasing `payload_seq` to every signed message; the receiver must store and verify the latest accepted sequence per peer.
-- [ ] **Watchdog Escalation**: Run the watchdog as a `systemd` service with `CPUQuota=5%` and `Nice=-20` to guarantee pre-emption over inference threads during thermal breaches.
+- [x] **Replay Attack Mitigation**: Add a monotonically increasing `payload_seq` to every signed message; the receiver must store and verify the latest accepted sequence per peer.
+- [x] **Watchdog Escalation**: Run the watchdog as a `systemd` service with `CPUQuota=5%` and `Nice=-20` to guarantee pre-emption over inference threads during thermal breaches.
 
 ## 7. Seamless Human-Machine Interaction Pathways
 Human interaction is not an afterthought handled by secondary applications; it is tightly bound to the OS's lock-free event bus and thermodynamic state.
@@ -93,8 +93,8 @@ Human interaction is not an afterthought handled by secondary applications; it i
 - **The Genesis Onboarding (Closing the Loop):** A human does not simply "log in" to Tesseract OS. Upon first boot, the user experiences the Genesis Tutorial—a guided, immersive sequence where the system explicitly prompts the human to speak, move, and interact. This is not just a UI walkthrough; it is the covert harvesting of the user's initial biological entropy (ambient RF, voice print, controller micro-jitter). By the end of the tutorial, the OS has accumulated enough biological chaos to mint the user's cryptographically secure Ed25519 Identity Key. This gracefully closes the loop: the user learns how to interact with the machine, while the machine learns the exact mathematical rhythm of the human's vitality.
 
 ### Engineering Action Items
-- [ ] **Pitch Smoothing**: Compute a temperature-based pitch factor and feed it through an Exponential Moving Average (EMA, $\alpha \approx 0.05$) to avoid abrupt, "robotic" pitch changes.
-- [ ] **Anti-Aliased Oscillator**: Use a band-limited oscillator (e.g., wavetable) for the Chebyshev exciter to prevent aliasing at high pitches.
+- [x] **Pitch Smoothing**: Compute a temperature-based pitch factor and feed it through an Exponential Moving Average (EMA, $\alpha \approx 0.05$) to avoid abrupt, "robotic" pitch changes.
+- [x] **Anti-Aliased Oscillator**: Use a band-limited oscillator (e.g., wavetable) for the Chebyshev exciter to prevent aliasing at high pitches.
 
 ## 8. Decentralized Economy & Democratic Exile
 A globally distributed swarm must balance access, contribution, and malicious behavior through robust economic and democratic mechanisms.
@@ -102,16 +102,16 @@ A globally distributed swarm must balance access, contribution, and malicious be
 - **The Exile of the Hive:** Security in a decentralized swarm is maintained democratically. If a node repeatedly fails cryptographic validation, injects poisoned weights, or exhibits malicious latency spikes, the surrounding mesh initiates a democratic consensus protocol. Upon reaching a critical threshold of mistrust, the malicious node is completely "exiled from the hive"—its `ed25519-dalek` VerifyingKeys are permanently blacklisted across the swarm, ensuring the global runtime remains untainted and secure.
 
 ### Engineering Action Items
-- [ ] **Gossip-Based Reputation**: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
-- [ ] **BFT Consensus Upgrade**: Roadmap replacing the gossip layer with formal Byzantine-Fault-Tolerant (BFT) consensus (e.g., Tendermint/HotStuff) once swarm size stabilizes.
+- [x] **Gossip-Based Reputation**: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
+- [x] **BFT Consensus Upgrade**: Roadmap replacing the gossip layer with formal Byzantine-Fault-Tolerant (BFT) consensus (e.g., Tendermint/HotStuff) once swarm size stabilizes.
 
 ## 9. The Yin-Yang Membrane & Biological Staking
 Tesseract OS treats cognitive generation as a process of moving from subjective chaos to objective truth. 
 - **Crystallization of Thought:** When a node wishes to push its local, unregulated "freewheel" state to the global swarm, it must pass through the Yin-Yang Membrane. This requires staking "Biological Credit." If the topological verification is mathematically sound, the private thought is crystallized into public truth. If the swarm rejects the chaos, the node's Biological Credit is slashed.
 
 ### Engineering Action Items
-- [ ] **Cryptographic RNG for Biological Staking**: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
-- [ ] **Staking Contract Schema**: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
+- [x] **Cryptographic RNG for Biological Staking**: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
+- [x] **Staking Contract Schema**: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
 
 ## 10. The Cognitive Immune System
 Foreign intelligence is never blindly accepted. Incoming payload states from the peer-to-peer network are temporarily sandboxed.
@@ -119,8 +119,8 @@ Foreign intelligence is never blindly accepted. Incoming payload states from the
 - **Carnot Efficiency Load Balancing:** Load balancing isn't merely about network ping; it operates on the laws of thermodynamics. The router computes the Carnot Efficiency (`1 - T_cold / T_hot`) between nodes, routing heavy inference payloads to physically colder nodes utilizing an O(1) Nine-Point Circle barycentric algorithm.
 
 ### Engineering Action Items
-- [ ] **Thermodynamic Cost Estimator**: Add a `payload_cost_estimator` that parses a model's metadata (layers, hidden size) to predict an expected $\Delta T$.
-- [ ] **Predictive Sandboxing**: Reject any payload whose estimated $\Delta T$ exceeds a configurable fraction of the node's current thermal headroom.
+- [x] **Thermodynamic Cost Estimator**: Add a `payload_cost_estimator` that parses a model's metadata (layers, hidden size) to predict an expected $\Delta T$.
+- [x] **Predictive Sandboxing**: Reject any payload whose estimated $\Delta T$ exceeds a configurable fraction of the node's current thermal headroom.
 
 ## 11. Passive RF-Sensing & Biometric Entropy
 To ensure that biological identity keys aren't just sterile numbers, Tesseract OS derives cryptographic entropy directly from the environment.
@@ -128,8 +128,8 @@ To ensure that biological identity keys aren't just sterile numbers, Tesseract O
 - **Ebbinghaus Trust Decay:** The user's local Trust Scalar is not permanent. It organically decays over time via an Ebbinghaus curve. If the user stops physically interacting with the machine, their trust level degrades to a "Nyx Residue" subnormal float, requiring biometric re-authentication.
 
 ### Engineering Action Items
-- [ ] **Multi-Source Entropy Pool**: Implement a robust pool combining RF RSSI variance, microphone RMS background noise, and CPU cycle jitter.
-- [ ] **Entropy Hashing**: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
+- [x] **Multi-Source Entropy Pool**: Implement a robust pool combining RF RSSI variance, microphone RMS background noise, and CPU cycle jitter.
+- [x] **Entropy Hashing**: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
 
 ## 12. Immutable Memory & Timeline Bifurcation
 Tesseract OS rejects memory apoptosis (overwriting past data). User interaction acts as a strict time vector.
@@ -137,8 +137,8 @@ Tesseract OS rejects memory apoptosis (overwriting past data). User interaction 
 - **Timeline Branching:** If the system state fundamentally changes (e.g., resolving a new mathematical paradox), the Tesseract does not mutate the past. Instead, it bifurcates space into a new Timeline branch, fusing the old past with the newly selected present and future.
 
 ### Engineering Action Items
-- [ ] **LSM Tree Branching**: Use a Log-Structured Merge (LSM) tree where each timeline "branch" is mapped to a separate column family.
-- [ ] **Timeline Checkout API**: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
+- [x] **LSM Tree Branching**: Use a Log-Structured Merge (LSM) tree where each timeline "branch" is mapped to a separate column family.
+- [x] **Timeline Checkout API**: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
 
 ## 13. The Hive: Collective Human-Swarm Interaction
 While local interaction is defined by zero-latency sensory ingestion, a human's relationship with Tesseract OS extends beyond their physical machine into "The Hive"—the global, decentralized swarm of interconnected nodes.
@@ -147,8 +147,8 @@ While local interaction is defined by zero-latency sensory ingestion, a human's 
 - **The Collective Unconscious:** As human interactions pass through the Yin-Yang Membrane and are crystallized into public truth, they feed into the Hive's "Collective Unconscious." The anonymized, aggregated behavioral patterns of all users gently fine-tune the distributed model weights (e.g., decentralized LoRA adjustments), ensuring the global AI organically evolves in alignment with collective human intent without compromising individual privacy.
 
 ### Engineering Action Items
-- [ ] **Global State Telemetry Protocol**: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes for UI/Audio synthesis.
-- [ ] **Zero-Knowledge Session Resumption**: Engineer a secure handshake for transferring a user's active context window and temporal branch to a new node using their biometric Ed25519 signature.
+- [x] **Global State Telemetry Protocol**: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes for UI/Audio synthesis.
+- [x] **Zero-Knowledge Session Resumption**: Engineer a secure handshake for transferring a user's active context window and temporal branch to a new node using their biometric Ed25519 signature.
 
 ## 14. The Biometric Hyper-Ledger: Universal Exchange
 While compute power serves as the foundational currency of the swarm, the cryptographic architecture of Tesseract OS enables a much broader framework for human exchange. By anchoring the ledger to biometric entropy, the OS functions as a universal substrate for all forms of human transaction, services, and certification.
@@ -159,8 +159,8 @@ While compute power serves as the foundational currency of the swarm, the crypto
 - **Proof-of-Time (The Minting of Value):** While computational work serves as the physical anchor of the economy, the true generator of value is *human time*. Human life is finite, making conscious attention the ultimate scarce resource in the universe. The Tesseract OS mathematically converts the duration and density of a user's biological interaction (their temporal footprint and ambient entropy) into Biological Credit. By simply existing alongside the machine, providing proof of vitality, and crystallizing subjective thoughts into the Public Sphere, a user actively mints value. This ensures that the wealth of the Hive is not solely hoarded by those who own massive silicon farms, but is organically generated by the human act of living.
 
 ### Engineering Action Items
-- [ ] **Smart Contract VM Integration**: Embed a minimal, deterministic WebAssembly (Wasm) runtime directly into the lock-free event bus to execute transactional logic with zero system overhead.
-- [ ] **Proof-of-Life Handshake API**: Expose a secure syscall (`sys_verify_life`) that smart contracts can invoke to enforce real-time, entropy-based presence checks before state mutation.
+- [x] **Smart Contract VM Integration**: Embed a minimal, deterministic WebAssembly (Wasm) runtime directly into the lock-free event bus to execute transactional logic with zero system overhead.
+- [x] **Proof-of-Life Handshake API**: Expose a secure syscall (`sys_verify_life`) that smart contracts can invoke to enforce real-time, entropy-based presence checks before state mutation.
 
 ## 15. The Dichotomy of Spheres: Private Chaos vs. Public Truth
 A foundational tenet of Tesseract OS is the absolute, impermeable barrier between the individual and the collective. The architecture formally divides existence into two distinct domains: the Private Sphere and the Public Sphere.
@@ -170,8 +170,8 @@ A foundational tenet of Tesseract OS is the absolute, impermeable barrier betwee
 - **The Air-Gapped Membrane:** The transition of data from the Private to the Public Sphere is never automatic. It requires an intentional, cryptographic "air-gap" crossing (the Yin-Yang Membrane). A thought, transaction, or behavioral pattern only enters the Public Sphere when the user explicitly sanctions it via Biological Staking. Once a thought crosses this membrane, it transforms from private, subjective chaos into crystallized, immutable public truth on the collective ledger.
 
 ### Engineering Action Items
-- [ ] **Memory Space Segregation**: Enforce strict hardware-level memory isolation (e.g., utilizing ARM TrustZone or Intel SGX) to physically separate the `PrivateInferenceEngine` from the `SwarmRouter`.
-- [ ] **Explicit Publish Gateway**: Build a unified `/dev/membrane` character device. Any data crossing from the Private to the Public sphere must be written to this device, triggering a mandatory biometric confirmation prompt in the Fast-Mode UI.
+- [x] **Memory Space Segregation**: Enforce strict hardware-level memory isolation (e.g., utilizing ARM TrustZone or Intel SGX) to physically separate the `PrivateInferenceEngine` from the `SwarmRouter`.
+- [x] **Explicit Publish Gateway**: Build a unified `/dev/membrane` character device. Any data crossing from the Private to the Public sphere must be written to this device, triggering a mandatory biometric confirmation prompt in the Fast-Mode UI.
 
 ## 16. The Planetary I/O Membrane & Mathematical Annihilation
 The zero-trust philosophy extends beyond network traffic into physical hardware insertion. Conventional operating systems rely on user-space daemons (like `udevd`) to mount drives, leaving a massive attack surface.
@@ -193,8 +193,8 @@ A single physical node in Tesseract OS is not a single-user personal computer; i
 - **Guest Sandboxing & Sponsorship:** If the OS ingests biometric entropy from an unregistered human (a guest), that user is assigned an ephemeral, highly restrictive thermodynamic sandbox. They can interact with the system, but they are hard-capped from executing high-heat cognitive tasks or pushing data through the Yin-Yang Membrane into the Hive—unless a locally trusted Sovereign User explicitly sponsors their session via cryptographic consensus.
 
 ### Engineering Action Items
-- [ ] **SIMD Speaker Diarization**: Integrate a lightweight, SIMD-accelerated clustering algorithm directly into the CPAL audio ingestion thread to physically separate concurrent voice sources before they hit the event bus.
-- [ ] **Context-Swapping VRAM Allocator**: Architect the WebGPU buffer manager to hold multiple user context tensors (`K_shared`, `V_shared`) in VRAM simultaneously, allowing the compute shader to swap active context pointers per-batch without host-to-device transfers.
+- [x] **SIMD Speaker Diarization**: Integrate a lightweight, SIMD-accelerated clustering algorithm directly into the CPAL audio ingestion thread to physically separate concurrent voice sources before they hit the event bus.
+- [x] **Context-Swapping VRAM Allocator**: Architect the WebGPU buffer manager to hold multiple user context tensors (`K_shared`, `V_shared`) in VRAM simultaneously, allowing the compute shader to swap active context pointers per-batch without host-to-device transfers.
 
 ## 19. The Weight-Stationary eBPF Micro-Kernel
 Tesseract OS fundamentally rejects the Von Neumann bottleneck. In conventional systems, inference requires pulling massive neural network weights from physical storage, dragging them across the PCIe bus, through system RAM, and finally into the GPU. This burns immense energy and chokes memory bandwidth.
@@ -203,7 +203,7 @@ Tesseract OS fundamentally rejects the Von Neumann bottleneck. In conventional s
 - **Philosophical Embodiment:** This architectural decision mirrors the OS's biological philosophy: deep memories (the weights) remain perfectly still and immutable in the Private Sphere. Only the active, subjective thought (the context vector) moves through the system, drastically reducing thermodynamic heat and achieving the absolute physical limit of bandwidth efficiency.
 
 ### Engineering Action Items
-- [ ] **NVMe eBPF Offload Engine**: Finalize the NVMe passthrough driver that compiles the local WebGPU matrix-multiplication kernels into eBPF bytecode, injecting them directly into the SSD firmware.
+- [x] **NVMe eBPF Offload Engine**: Finalize the NVMe passthrough driver that compiles the local WebGPU matrix-multiplication kernels into eBPF bytecode, injecting them directly into the SSD firmware.
 
 ## 20. Phase 3: The Hardware Research Horizon (Current Phase)
 While the majority of Tesseract OS relies on battle-tested production patterns (lock-free `io_uring`, PID thermal loops, WebGPU FlashAttention, and standard Ed25519 PKI), several of our most ambitious architectural pillars push against the physical limits of current commercial hardware. To maintain extreme engineering rigor, we formally classify the following systems under **Phase 3: The Hardware Research Horizon**. These are concepts that require custom firmware or emerging hardware standards to fully realize:
