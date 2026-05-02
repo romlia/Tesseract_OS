@@ -1,4 +1,7 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P1]: Add a `payload_cost_estimator` that parses a model's metadata to predict an expected Delta T.
+// TODO[P1]: Reject any payload whose estimated Delta T exceeds a configurable fraction of the node's current thermal headroom.
+// TODO[P2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
 use crate::nvme::EbpfMicroKernel;
 use bytemuck::{Pod, Zeroable};
 use memmap2::MmapOptions;

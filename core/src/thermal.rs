@@ -9,6 +9,8 @@ pub struct StressResult {
 }
 
 /// Minimal thermal model derived from the stress test.
+#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P1]: Define hard caps on dt_ms (minimum/maximum) and enforce them in the scheduler regardless of PID output.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ThermalModel {
     pub thermal_mass: f32,
