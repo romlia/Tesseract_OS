@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+cd "$(dirname "$(readlink -f "$0")")"
+
 if [ -n "$WAYLAND_DISPLAY" ] || [ -n "$DISPLAY" ]; then
     echo "[!] WARNING: You are running inside a Desktop Environment ($XDG_SESSION_TYPE)."
     echo "[!] Tesseract OS achieves zero-allocation rendering via direct KMS/DRM."
