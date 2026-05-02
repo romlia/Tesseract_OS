@@ -102,10 +102,26 @@ use crate::SensoryEvent;
 #[derive(Debug)]
 pub struct QueueFull;
 
+// TODO: Generic EventBus Trait (Unify crossbeam queue logic, epoch handling, per-stream back-pressure)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BackpressurePolicy {
+    DropOldest,
+    DropNewest,
+    Block,
+}
+
+pub trait EventBus<T>: Send + Sync {
+    fn push(&self, event: T) -> Result<(), QueueFull>;
+    fn pop(&self) -> Option<T>;
+    fn len(&self) -> usize;
+    fn capacity(&self) -> usize;
+}
+
 pub struct LockFreeEventBus {
     buffer: [UnsafeCell<Option<SensoryEvent>>; 256],
     head: AtomicUsize,
     tail: AtomicUsize,
+    policy: BackpressurePolicy,
 }
 
 unsafe impl Sync for LockFreeEventBus {}
@@ -113,21 +129,26 @@ unsafe impl Send for LockFreeEventBus {}
 
 impl Default for LockFreeEventBus {
     fn default() -> Self {
-        Self::new()
+        Self::new(BackpressurePolicy::Block)
     }
 }
 
 impl LockFreeEventBus {
-    pub fn new() -> Self {
+    pub fn new(policy: BackpressurePolicy) -> Self {
         const INIT: UnsafeCell<Option<SensoryEvent>> = UnsafeCell::new(None);
         Self {
             buffer: [INIT; 256],
             head: AtomicUsize::new(0),
             tail: AtomicUsize::new(0),
+            policy,
         }
     }
+}
 
-    pub fn len(&self) -> usize {
+impl EventBus<SensoryEvent> for LockFreeEventBus {
+    fn capacity(&self) -> usize { 256 }
+
+    fn len(&self) -> usize {
         let head = self.head.load(Ordering::Relaxed);
         let tail = self.tail.load(Ordering::Relaxed);
         if head >= tail {
@@ -137,22 +158,31 @@ impl LockFreeEventBus {
         }
     }
 
-    pub fn push(&self, event: SensoryEvent) -> Result<(), QueueFull> {
+    fn push(&self, event: SensoryEvent) -> Result<(), QueueFull> {
         let backoff = crossbeam::utils::Backoff::new();
         loop {
             if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
             let tail = self.tail.load(Ordering::Acquire);
             let next_tail = (tail + 1) % 256;
             
-            // Safety Net: Bounded Spin-Wait to prevent deadlock.
             if next_tail == self.head.load(Ordering::Acquire) {
-                if backoff.is_completed() {
-                    // Buffer full. Drop event to maintain hardware stability.
-                    tracing::warn!("EventBus overflow, dropping sensory event.");
-                    return Err(QueueFull);
+                match self.policy {
+                    BackpressurePolicy::DropOldest => {
+                        let _ = self.pop();
+                        continue;
+                    }
+                    BackpressurePolicy::DropNewest => {
+                        return Err(QueueFull);
+                    }
+                    BackpressurePolicy::Block => {
+                        if backoff.is_completed() {
+                            tracing::warn!("EventBus blocked too long, dropping event.");
+                            return Err(QueueFull);
+                        }
+                        backoff.spin();
+                        continue;
+                    }
                 }
-                backoff.spin();
-                continue;
             }
 
             unsafe {
@@ -163,7 +193,7 @@ impl LockFreeEventBus {
         }
     }
 
-    pub fn pop(&self) -> Option<SensoryEvent> {
+    fn pop(&self) -> Option<SensoryEvent> {
         let head = self.head.load(Ordering::Relaxed);
         if head == self.tail.load(Ordering::Acquire) {
             return None; // Empty
@@ -174,6 +204,36 @@ impl LockFreeEventBus {
         };
         self.head.store((head + 1) % 256, Ordering::Release);
         event
+    }
+}
+
+pub struct CrossbeamBus<T> {
+    queue: crossbeam::queue::ArrayQueue<T>,
+}
+
+impl<T> CrossbeamBus<T> {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            queue: crossbeam::queue::ArrayQueue::new(capacity),
+        }
+    }
+}
+
+impl<T: Send + Sync> EventBus<T> for CrossbeamBus<T> {
+    fn capacity(&self) -> usize {
+        self.queue.capacity()
+    }
+
+    fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    fn push(&self, event: T) -> Result<(), QueueFull> {
+        self.queue.push(event).map_err(|_| QueueFull)
+    }
+
+    fn pop(&self) -> Option<T> {
+        self.queue.pop()
     }
 }
 
@@ -269,131 +329,16 @@ struct RicciParams {
     hidden_size: u32,
 }
 
-// ----------------------------------------------------------------------------
-// PHASE 2: Speculative Universe
-// ----------------------------------------------------------------------------
-// Each branch in the Tesseract OS requires its own localized WGPU buffers to 
-// prevent state corruption while exploring multiple latent futures simultaneously.
-pub struct SpeculativeUniverse {
-    pub id: usize,
-    pub predicted_anchor: Vec<f32>,
-    pub current_vec_offset: wgpu::BufferAddress,
-    pub norm_out_offset: wgpu::BufferAddress,
-}
 
-pub struct BootesVoid {
-    bitfield: [u64; 4],
-}
-
-impl BootesVoid {
-    pub fn new() -> Self { Self { bitfield: [0; 4] } }
-    pub fn insert(&mut self, key: &str) {
-        let bytes = key.as_bytes();
-        let mut h1: usize = 5381;
-        let mut h2: usize = 5381;
-        for (i, &b) in bytes.iter().enumerate() {
-            if i % 2 == 0 {
-                h1 = ((h1 << 5).wrapping_add(h1)) ^ (b as usize);
-            } else {
-                h2 = ((h2 << 5).wrapping_add(h2)) ^ (b as usize);
-            }
-        }
-        self.bitfield[(h1 / 64) % 4] |= 1 << (h1 % 64);
-        self.bitfield[(h2 / 64) % 4] |= 1 << (h2 % 64);
-    }
-    pub fn contains(&self, key: &str) -> bool {
-        let bytes = key.as_bytes();
-        let mut h1: usize = 5381;
-        let mut h2: usize = 5381;
-        for (i, &b) in bytes.iter().enumerate() {
-            if i % 2 == 0 {
-                h1 = ((h1 << 5).wrapping_add(h1)) ^ (b as usize);
-            } else {
-                h2 = ((h2 << 5).wrapping_add(h2)) ^ (b as usize);
-            }
-        }
-        let b1 = self.bitfield[(h1 / 64) % 4] & (1 << (h1 % 64)) != 0;
-        let b2 = self.bitfield[(h2 / 64) % 4] & (1 << (h2 % 64)) != 0;
-        b1 && b2
-    }
-}
-
-pub fn generate_antimatter(foreign_heat: f32, foreign_hz: f32, foreign_cam: [f32; 3]) -> (f32, f32, [f32; 3]) {
-    // Invert the sign bit of all properties to create an anti-tensor
-    (
-        f32::from_bits(foreign_heat.to_bits() ^ 0x80000000),
-        f32::from_bits(foreign_hz.to_bits() ^ 0x80000000),
-        [
-            f32::from_bits(foreign_cam[0].to_bits() ^ 0x80000000),
-            f32::from_bits(foreign_cam[1].to_bits() ^ 0x80000000),
-            f32::from_bits(foreign_cam[2].to_bits() ^ 0x80000000),
-        ]
-    )
-}
-
-/// Multi-Dimensional Smart Contract Sandbox
-/// Filters and isolates foreign consensus logic before attempting Timeline Fusion.
-pub struct RealitySandbox;
-
-impl RealitySandbox {
-    pub fn validate_and_merge(
-        state: &crate::GlobalContext,
-        sender_id: &str,
-        foreign_heat: f32,
-        foreign_hz: f32,
-        foreign_cam: [f32; 3],
-        local_heat_val: f32,
-    ) {
-        // Check if node is already cryptographically exiled
-        if let Ok(exiled) = state.exiled_nodes.try_lock() {
-            if exiled.contains(&sender_id.to_string()) {
-                return;
-            }
-        }
-
-        let local_cam = *state.camera_pos.lock().unwrap();
-        let dx = local_cam[0] - foreign_cam[0];
-        let dy = local_cam[1] - foreign_cam[1];
-        let dz = local_cam[2] - foreign_cam[2];
-        let dh = local_heat_val - foreign_heat;
-
-        // Hyperpolytope Bounds Check
-        // The L1-Norm radius defines an unbroken 4D containment field.
-        let distance = dx.abs() + dy.abs() + dz.abs() + dh.abs() * 0.1;
-
-        if distance > 10.0 {
-            // COGNITIVE ATTACK DETECTED
-            tracing::warn!("⚠️ HYPERPOLYTOPE BREACH: Foreign state distance ({:.1}) exceeds limits! Generating Antimatter.", distance);
-            
-            // Annihilate the paradox by generating its antimatter counterpart
-            let (_anti_heat, _anti_hz, _anti_cam) = generate_antimatter(foreign_heat, foreign_hz, foreign_cam);
-            
-            // Map to Boötes Void (Quarantine Zone)
-            if let Ok(mut exiled) = state.exiled_nodes.try_lock() {
-                exiled.push(sender_id.to_string());
-                tracing::error!("🚫 BOÖTES VOID: Node {} permanently quarantined.", sender_id);
-            }
-        } else {
-            // TIMELINE FUSION (Equilibrium Parsing)
-            tracing::info!("🌌 Timeline Fusion: Merging foreign consensus (Heat: {:.1}, Hz: {:.1}) from Node {}", foreign_heat, foreign_hz, sender_id);
-            
-            // Smoothly bifurcate the timeline by blending states
-            state.audio_oscillator_hz.store(
-                (f32::from_bits(state.audio_oscillator_hz.load(std::sync::atomic::Ordering::Relaxed)) * 0.9 + foreign_hz * 0.1).to_bits(),
-                std::sync::atomic::Ordering::Relaxed
-            );
-
-            if let Ok(mut cam) = state.camera_pos.try_lock() {
-                cam[0] = cam[0] * 0.9 + foreign_cam[0] * 0.1;
-                cam[1] = cam[1] * 0.9 + foreign_cam[1] * 0.1;
-                cam[2] = cam[2] * 0.9 + foreign_cam[2] * 0.1;
-            }
-        }
-    }
+struct SpeculativeUniverse {
+    id: usize,
+    predicted_anchor: Vec<f32>,
+    current_vec_offset: u64,
+    norm_out_offset: u64,
 }
 
 pub fn run_continuous_loop(
-    bus: std::sync::Arc<crate::temporal::LockFreeEventBus>,
+    bus: std::sync::Arc<dyn crate::temporal::EventBus<crate::SensoryEvent>>,
     state: std::sync::Arc<crate::GlobalContext>,
 ) {
     // The local Tesseract explicitly bypasses the Cognitive Immune System for locally generated states.
@@ -425,9 +370,11 @@ pub fn run_continuous_loop(
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer. 
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates 
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
+    // TODO: Timeline API (Expose `checkout(branch_id)` to swap inference memory contexts seamlessly)
     tracing::info!("Starting 4D Temporal Loop (60Hz target) with wgpu Compute Shaders...");
 
     // WGPU Setup
+    // TODO: ShaderFactory Abstraction (Dynamic loading of 128-bit SIMD vs scalar WGSL modules)
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance
         .request_adapter(&wgpu::RequestAdapterOptions::default()))
@@ -526,97 +473,6 @@ pub fn run_continuous_loop(
     let rmsnorm_pipe = create_pipeline("rmsnorm", &bgl);
 
 
-    let mobius_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 3,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    });
-    let mobius_pipe = create_pipeline("mobius_twist", &mobius_bgl);
-
-
-    let kuramoto_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 6, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 7, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let kuramoto_pipe = create_pipeline("kuramoto_sync", &kuramoto_bgl);
-
-    let frenet_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 6, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let frenet_pipe = create_pipeline("frenet_serret_encode", &frenet_bgl);
-
-    let rucklidge_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let rucklidge_pipe = create_pipeline("rucklidge_attractor", &rucklidge_bgl);
-
-    let wolfram_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let wolfram_pipe = create_pipeline("wolfram_compression", &wolfram_bgl);
-
-    let gray_scott_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 5, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let gray_scott_pipe = create_pipeline("gray_scott_decode", &gray_scott_bgl);
-
-    let ricci_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[
-            wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 1, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 3, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: false }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-            wgpu::BindGroupLayoutEntry { binding: 4, visibility: wgpu::ShaderStages::COMPUTE, ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Storage { read_only: true }, has_dynamic_offset: false, min_binding_size: None }, count: None },
-        ],
-    });
-    let ricci_pipe = create_pipeline("ricci_flow_contraction", &ricci_bgl);
 
     // Dynamic Memory Profiling for Speculative Branching
     let limits = adapter.limits();
@@ -760,129 +616,7 @@ pub fn run_continuous_loop(
         label: None,
     });
 
-    let f_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<FrenetParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-    let w_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<WolframParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
 
-    let kuramoto_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<KuramotoParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-    queue.write_buffer(&kuramoto_params_buf, 0, bytemuck::bytes_of(&KuramotoParams {
-        dt: 0.01,
-        p_gain: 1.0,
-        i_gain: 0.1,
-        d_gain: 0.05,
-        num_oscillators: LILITH_CONFIG.hidden_size as u32,
-    }));
-
-    let rucklidge_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<RucklidgeParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-    queue.write_buffer(&rucklidge_params_buf, 0, bytemuck::bytes_of(&RucklidgeParams {
-        dt: 0.01,
-        hidden_size: LILITH_CONFIG.hidden_size as u32,
-    }));
-
-    let ricci_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<RicciParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-    queue.write_buffer(&ricci_params_buf, 0, bytemuck::bytes_of(&RicciParams {
-        dt: 0.01,
-        alpha: 0.05,
-        avg_kappa: 0.1,
-        hidden_size: LILITH_CONFIG.hidden_size as u32,
-    }));
-
-    let gs_params_buf = device.create_buffer(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<GrayScottParams>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-        label: None,
-    });
-    queue.write_buffer(&gs_params_buf, 0, bytemuck::bytes_of(&GrayScottParams {
-        dt: 0.01,
-        du: 0.2,
-        dv: 0.1,
-        dim: LILITH_CONFIG.hidden_size as u32,
-    }));
-
-    let kuramoto_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &kuramoto_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: kuramoto_params_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: qkv_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: attn_out_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: gate_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 5, resource: up_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 6, resource: swiglu_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 7, resource: ln_weights_buf.as_entire_binding() },
-        ],
-    });
-
-    let rucklidge_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &rucklidge_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: rucklidge_params_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: curvature_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: torsion_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: ternary_u32s_buf.as_entire_binding() },
-        ],
-    });
-
-    let ricci_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &ricci_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: ricci_params_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: qkv_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: gate_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: router_weights_buf.as_entire_binding() },
-        ],
-    });
-
-    let gs_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &gray_scott_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: gs_params_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: current_vec_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: up_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: swiglu_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: norm_out_buf.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 5, resource: ln_weights_buf.as_entire_binding() },
-        ],
-    });
-
-    let mobius_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &mobius_bgl,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 3, resource: current_vec_buf.as_entire_binding() },
-        ],
-    });
 
     // --- DECODE LOGITS PIPELINE (Fix 2 & 3) ---
     let decode_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -1190,130 +924,7 @@ pub fn run_continuous_loop(
 
 
 
-    let run_mobius_twist = |seq_len: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&mobius_pipe);
-        cpass.set_bind_group(0, bg, &[]);
-        cpass.dispatch_workgroups(LILITH_CONFIG.num_heads as u32, seq_len, 1);
-    };
 
-
-
-    let run_kuramoto = |num_oscillators: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&kuramoto_pipe);
-        cpass.set_bind_group(0, bg, &[]);
-        cpass.dispatch_workgroups(num_oscillators.div_ceil(64), 1, 1);
-    };
-
-    let run_frenet_serret = |hidden_size: u32,
-                             dt: f32,
-                             f_params_buf: &wgpu::Buffer,
-                             position_buf: &wgpu::Buffer,
-                             prev_pos_buf: &wgpu::Buffer,
-                             prev_vel_buf: &wgpu::Buffer,
-                             prev_acc_buf: &wgpu::Buffer,
-                             curvature_out_buf: &wgpu::Buffer,
-                             torsion_out_buf: &wgpu::Buffer| {
-        queue.write_buffer(
-            f_params_buf,
-            0,
-            bytemuck::bytes_of(&FrenetParams { dt, hidden_size }),
-        );
-        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &frenet_bgl,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: f_params_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: position_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: prev_pos_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 3, resource: prev_vel_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 4, resource: prev_acc_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 5, resource: curvature_out_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 6, resource: torsion_out_buf.as_entire_binding() },
-            ],
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
-            cpass.set_pipeline(&frenet_pipe);
-            cpass.set_bind_group(0, &bg, &[]);
-            cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
-        }
-        queue.submit(Some(encoder.finish()));
-    };
-
-    let run_rucklidge_attractor = |hidden_size: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&rucklidge_pipe);
-        cpass.set_bind_group(0, bg, &[]);
-        let particles = hidden_size / 3;
-        cpass.dispatch_workgroups(particles.div_ceil(64), 1, 1);
-    };
-
-    let run_wolfram_compression = |hidden_size: u32,
-                                   blend_factor: f32,
-                                   w_params_buf: &wgpu::Buffer,
-                                   state_in_buf: &wgpu::Buffer,
-                                   state_out_buf: &wgpu::Buffer| {
-        queue.write_buffer(
-            w_params_buf,
-            0,
-            bytemuck::bytes_of(&WolframParams { hidden_size, blend_factor }),
-        );
-        let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &wolfram_bgl,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: w_params_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: state_in_buf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: state_out_buf.as_entire_binding() },
-            ],
-        });
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        {
-            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
-            cpass.set_pipeline(&wolfram_pipe);
-            cpass.set_bind_group(0, &bg, &[]);
-            cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
-        }
-        queue.submit(Some(encoder.finish()));
-    };
-
-    let run_gray_scott_decode = |dim: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&gray_scott_pipe);
-        cpass.set_bind_group(0, bg, &[]);
-        cpass.dispatch_workgroups(dim.div_ceil(64), 1, 1);
-    };
-
-    let run_ricci_flow_contraction = |hidden_size: u32, bg: &wgpu::BindGroup, encoder: &mut wgpu::CommandEncoder| {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: None,
-            timestamp_writes: None,
-        });
-        cpass.set_pipeline(&ricci_pipe);
-        cpass.set_bind_group(0, bg, &[]);
-        cpass.dispatch_workgroups(hidden_size.div_ceil(64), 1, 1);
-    };
 
     // Dependencies
     #[allow(dead_code)]
@@ -1348,10 +959,10 @@ pub fn run_continuous_loop(
 
     let mut native_state = (|| -> Option<NativeBrainState> {
         let s =
-            EbpfMicroKernel::new(&format!("{}/singularity_v44_7D_transformer.nvme", sml_path)).ok()?;
+            EbpfMicroKernel::new(&format!("{}/singularity_v45_7D_transformer.nvme", sml_path)).ok()?;
 
         let mut keys = Vec::new();
-        let mut key_file = File::open(format!("{}/v44_geometric_keys.bin", sml_path)).ok()?;
+        let mut key_file = File::open(format!("{}/v45_geometric_keys.bin", sml_path)).ok()?;
         let mut buf = [0u8; 8];
         while let Ok(8) = key_file.read(&mut buf) {
             keys.push(u64::from_le_bytes(buf));
@@ -1372,20 +983,20 @@ pub fn run_continuous_loop(
             std::slice::from_raw_parts(embed_mmap.as_ptr() as *const f32, embed_mmap.len() / 4)
         };
 
-        let mut ln_file = File::open(format!("{}/v43_layernorms.bin", sml_path)).ok()?;
+        let mut ln_file = File::open(format!("{}/v45_layernorms.bin", sml_path)).ok()?;
         let mut ln_data = vec![0.0f32; LILITH_CONFIG.num_layers * 2 * LILITH_CONFIG.hidden_size];
         ln_file
             .read_exact(bytemuck::cast_slice_mut(&mut ln_data))
             .ok()?;
 
-        let mut final_norm_file = File::open(format!("{}/v43_final_norm.bin", sml_path)).ok()?;
+        let mut final_norm_file = File::open(format!("{}/v45_final_norm.bin", sml_path)).ok()?;
         let mut final_norm = vec![0.0f32; LILITH_CONFIG.hidden_size];
         final_norm_file
             .read_exact(bytemuck::cast_slice_mut(&mut final_norm))
             .ok()?;
 
         let mut expert_mapping = vec![];
-        let mut map_file = File::open(format!("{}/v44_expert_mapping.bin", sml_path)).ok()?;
+        let mut map_file = File::open(format!("{}/v45_expert_mapping.bin", sml_path)).ok()?;
         let mut m_buf = [0u8; 8];
         while let Ok(8) = map_file.read(&mut m_buf) {
             expert_mapping.push(u64::from_le_bytes(m_buf) as usize);
@@ -1394,7 +1005,7 @@ pub fn run_continuous_loop(
         // Upload lm_head to GPU (1.77 GB) now that it is loaded from disk!
         queue.write_buffer(&lm_head_buf, 0, bytemuck::cast_slice(lm_head_slice));
 
-        let router_file = File::open(format!("{}/v44_moe_routers.bin", sml_path)).ok()?;
+        let router_file = File::open(format!("{}/v45_moe_routers.bin", sml_path)).ok()?;
         let router_mmap = Box::leak(Box::new(unsafe {
             MmapOptions::new().map(&router_file).ok()?
         }));
@@ -1809,63 +1420,7 @@ pub fn run_continuous_loop(
 
                 // Recursive layer calls would naturally enable infinite depth scaling.
                 for layer in 0..LILITH_CONFIG.num_layers {
-                    // --- PHASE 1: KURAMOTO OSCILLATOR SYNC ---
-                    // Map LLaDA 2.0 Vocab Embeddings to Natural Frequencies
-                    let embed_offset = layer * LILITH_CONFIG.hidden_size;
-                    queue.write_buffer(
-                        &ln_weights_buf,
-                        0,
-                        bytemuck::cast_slice(
-                            &native.embed_slice[embed_offset % native.embed_slice.len()
-                                ..((embed_offset % native.embed_slice.len()) + LILITH_CONFIG.hidden_size).min(native.embed_slice.len())],
-                        ),
-                    );
-                    run_kuramoto(LILITH_CONFIG.hidden_size as u32, &kuramoto_bg, &mut encoder);
 
-                    // --- PHASE 1.5: FRENET-SERRET TOPOLOGY ---
-                    run_frenet_serret(
-                        LILITH_CONFIG.hidden_size as u32,
-                        0.01,
-                        &f_params_buf,
-                        &current_vec_buf,
-                        &prev_pos_buf,
-                        &prev_vel_buf,
-                        &prev_acc_buf,
-                        &curvature_buf,
-                        &torsion_buf,
-                    );
-
-                    // --- PHASE 2: RUCKLIDGE STRANGE ATTRACTORS ---
-                    // Chaos Boundaries pre-fetched to VRAM to prevent NVMe bottlenecks
-                    run_rucklidge_attractor(LILITH_CONFIG.hidden_size as u32, &rucklidge_bg, &mut encoder);
-
-                    // --- PHASE 3: RICCI FLOW TOPOLOGICAL GRAVITY ---
-                    // Map LLaDA 2.0 MoE Router Weights to Metric Tensor
-                    let router_layer_offset = layer
-                        * (LILITH_CONFIG.num_experts * LILITH_CONFIG.hidden_size
-                            + LILITH_CONFIG.num_experts);
-                    let router_weights = &native.router_slice[router_layer_offset
-                        ..router_layer_offset
-                            + (LILITH_CONFIG.num_experts * LILITH_CONFIG.hidden_size)];
-                    queue.write_buffer(
-                        &router_weights_buf,
-                        0,
-                        bytemuck::cast_slice(router_weights),
-                    );
-                    
-                    run_ricci_flow_contraction(LILITH_CONFIG.hidden_size as u32, &ricci_bg, &mut encoder);
-                    
-                    // --- KLEIN BOTTLE EQUILIBRIUM ---
-                    run_mobius_twist(LILITH_CONFIG.seq_len as u32, &mobius_bg, &mut encoder);
-
-                    // --- PHASE 3.5: WOLFRAM COMPRESSION ---
-                    run_wolfram_compression(
-                        LILITH_CONFIG.hidden_size as u32,
-                        0.5,
-                        &w_params_buf,
-                        &current_vec_buf,
-                        &norm_out_buf,
-                    );
 
                     // Note: copy_buffer_to_buffer is currently kept, will be ping-ponged in Phase 3
                     encoder.copy_buffer_to_buffer(
@@ -1879,16 +1434,7 @@ pub fn run_continuous_loop(
                 
                 queue.submit(Some(encoder.finish()));
 
-                // --- PHASE 4: GRAY-SCOTT REACTION-DIFFUSION DECODE ---
-                // Map LLaDA 2.0 LM Head to Physical Crystallization Feed/Kill limits
-                queue.write_buffer(
-                    &ln_weights_buf,
-                    0,
-                    bytemuck::cast_slice(&native.lm_head_slice[0..LILITH_CONFIG.hidden_size]),
-                );
-                let mut gs_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                run_gray_scott_decode(LILITH_CONFIG.hidden_size as u32, &gs_bg, &mut gs_encoder);
-                queue.submit(Some(gs_encoder.finish()));
+
 
                 // Final Norm
                 queue.write_buffer(&ln_weights_buf, 0, bytemuck::cast_slice(&native.final_norm));
@@ -2164,7 +1710,7 @@ pub fn run_continuous_loop(
                 // Thermodynamic Filtering (Cognitive Immune System)
                 let local_heat_val = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
 
-                RealitySandbox::validate_and_merge(&state, &sender_id, foreign_heat, foreign_hz, foreign_cam, local_heat_val);
+
             }
         
         std::thread::sleep(Duration::from_millis(10));

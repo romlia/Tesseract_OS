@@ -1,4 +1,5 @@
 [workspace]
+# TODO: Feature Matrix Consolidation (Adopt features.toml for build system parsing to prevent ABI mismatches)
 members = [
     "core",
     "acoustics",

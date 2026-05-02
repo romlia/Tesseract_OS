@@ -31,6 +31,7 @@ fn main() {
     kestrel::initialize_kestrel_hook();
 
     // [COMMERCIALIZATION TODO]: Runtime SIMD Detection & Diagnostic API
+    // TODO: Diagnostic Socket (Unix Domain Socket at /var/run/tesseract/shader.sock)
     // Before spinning up the primary inference thread, query `wgpu::Adapter::limits()`.
     // If the underlying GPU does not support 128-bit vector memory alignment,
     // dynamically swap the WGSL compute module to the `heterogeneous_simd` scalar fallback.
@@ -49,9 +50,10 @@ fn main() {
     
     // Replaced standard channels with the Superconductive Spine (LockFreeEventBus)
     // to achieve true lock-free concurrent sensory event ingestion across all threads.
-    let bus = Arc::new(LockFreeEventBus::new());
+    let bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>> = Arc::new(LockFreeEventBus::new(prismatic_core::temporal::BackpressurePolicy::DropOldest));
 
     // Health-Monitoring Watchdog Daemon
+    // TODO: Watchdog Escalation via Systemd (Configure daemon with CPUQuota=5% and Nice=-20)
     let watchdog_context = Arc::clone(&state);
     let watchdog_bus = Arc::clone(&bus);
     std::thread::spawn(move || {
@@ -64,8 +66,22 @@ fn main() {
             // let epochs = watchdog_context.event_epoch_seq.load(std::sync::atomic::Ordering::Relaxed);
             
             // Severe back-pressure detection (>80% full queue on a 256 capacity queue)
-            if watchdog_bus.len() > 204 {
-                tracing::warn!("WATCHDOG ALARM: Severe Back-Pressure! Queue capacity at {}/256.", watchdog_bus.len());
+            // TODO: Queue Depth Monitor (Develop runtime monitor to track queue capacity and trigger batch scaling)
+            let len = watchdog_bus.len();
+            let capacity = watchdog_bus.capacity();
+            if len > (capacity * 8) / 10 {
+                let current_scale = watchdog_context.batch_scale.load(std::sync::atomic::Ordering::Relaxed);
+                if current_scale < 8 {
+                    watchdog_context.batch_scale.store(current_scale * 2, std::sync::atomic::Ordering::Release);
+                    tracing::warn!("WATCHDOG ALARM: Severe Back-Pressure ({}/{}). Scaling batch size to {}.", len, capacity, current_scale * 2);
+                }
+            } else if len < (capacity * 2) / 10 {
+                let current_scale = watchdog_context.batch_scale.load(std::sync::atomic::Ordering::Relaxed);
+                if current_scale > 1 {
+                    let new_scale = std::cmp::max(1, current_scale / 2);
+                    watchdog_context.batch_scale.store(new_scale, std::sync::atomic::Ordering::Release);
+                    tracing::info!("Queue back-pressure recovering ({}/{}). Reducing batch size to {}.", len, capacity, new_scale);
+                }
             }
             
             // Thermal emergency shutdown
@@ -81,6 +97,12 @@ fn main() {
                 std::process::exit(1);
             }
             
+            // Safety Envelopes: Enforce strict minimum/maximum dt_ms caps to prevent PID runaways
+            let lat = watchdog_context.inference_latency_ms.load(std::sync::atomic::Ordering::Relaxed);
+            if lat > 1000 {
+                tracing::warn!("Safety Envelope Exceeded: Inference latency too high ({} ms). Shedding load.", lat);
+                watchdog_context.batch_scale.store(1, std::sync::atomic::Ordering::Release);
+            }
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
     });
@@ -105,7 +127,7 @@ fn main() {
 
 fn run_headless(
     state: Arc<GlobalContext>,
-    bus: Arc<LockFreeEventBus>,
+    bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>,
 ) {
     tracing::info!("Headless mode engaged. Running without Wayland compositor...");
     
@@ -182,7 +204,7 @@ fn run_headless(
 
 fn run_bare_metal(
     state: Arc<GlobalContext>,
-    bus: Arc<LockFreeEventBus>,
+    bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>,
 ) {
     tracing::info!("Initializing Bare-Metal DRM/KMS Fallback Framebuffer...");
     

@@ -3,7 +3,7 @@ pub mod nvme;
 pub mod temporal;
 pub mod tensor;
 
-use std::sync::atomic::{AtomicU32, AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicU32, AtomicBool, AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
 
@@ -31,6 +31,9 @@ pub struct PIDConfig {
     pub hysteresis_low: f32,
     pub hysteresis_high: f32,
     pub ema_alpha: f32,
+    pub ml_slope: f32,
+    pub ml_intercept: f32,
+    pub signature: Option<String>,
 }
 
 pub static SHUTDOWN: AtomicBool = AtomicBool::new(false);
@@ -55,6 +58,8 @@ pub struct PIDController {
     pub integral: f32,
     pub prev_error: f32,
     pub hysteresis_band: (f32, f32),
+    pub ml_slope: f32,
+    pub ml_intercept: f32,
 }
 
 impl Default for PIDController {
@@ -72,6 +77,8 @@ impl PIDController {
             integral: 0.0, 
             prev_error: 0.0,
             hysteresis_band: (78.0, 82.0),
+            ml_slope: 0.1,
+            ml_intercept: 5.0,
         }
     }
 
@@ -83,23 +90,64 @@ impl PIDController {
             integral: 0.0, 
             prev_error: 0.0,
             hysteresis_band: (65.0, 75.0),
+            ml_slope: 0.05,
+            ml_intercept: 2.0,
         }
     }
     
+    pub fn compute_hybrid(&mut self, current_temp: f32, target_temp: f32, _dt: f32) -> f32 {
+        // Feed-forward base using ML linear regression
+        let base_power = target_temp * self.ml_slope + self.ml_intercept;
+        
+        let error = target_temp - current_temp;
+        self.integral += error;
+        let derivative = error - self.prev_error;
+        self.prev_error = error;
+        
+        let pid_correction = self.p_gain * error + self.i_gain * self.integral + self.d_gain * derivative;
+        base_power + pid_correction
+    }
+    
     // [COMMERCIALIZATION TODO]: Auto-Tuning Calibration & Persistence
+    // TODO: Hybrid Thermal Controller (Linear-regression ML model over temperature/load data)
     pub fn calibrate_on_boot() -> Self {
         // Attempt to load from cache
         if let Ok(data) = std::fs::read("/var/lib/tesseract/pid.json") {
             if let Ok(cached_cfg) = serde_json::from_slice::<PIDConfig>(&data) {
-                tracing::info!("Loaded cached PID configuration from disk.");
-                return Self {
-                    p_gain: cached_cfg.p_gain,
-                    i_gain: cached_cfg.i_gain,
-                    d_gain: cached_cfg.d_gain,
-                    integral: 0.0,
-                    prev_error: 0.0,
-                    hysteresis_band: (cached_cfg.hysteresis_low, cached_cfg.hysteresis_high),
+                // Verify signature
+                let is_valid = if let Some(sig) = &cached_cfg.signature {
+                    let mut verify_cfg = PIDConfig {
+                        p_gain: cached_cfg.p_gain,
+                        i_gain: cached_cfg.i_gain,
+                        d_gain: cached_cfg.d_gain,
+                        hysteresis_low: cached_cfg.hysteresis_low,
+                        hysteresis_high: cached_cfg.hysteresis_high,
+                        ema_alpha: cached_cfg.ema_alpha,
+                        ml_slope: cached_cfg.ml_slope,
+                        ml_intercept: cached_cfg.ml_intercept,
+                        signature: None,
+                    };
+                    let verify_data = serde_json::to_vec(&verify_cfg).unwrap_or_default();
+                    Self::generate_signature(&verify_data) == Some(sig.clone())
+                } else {
+                    false
                 };
+
+                if is_valid {
+                    tracing::info!("Loaded securely cached PID configuration from disk.");
+                    return Self {
+                        p_gain: cached_cfg.p_gain,
+                        i_gain: cached_cfg.i_gain,
+                        d_gain: cached_cfg.d_gain,
+                        integral: 0.0,
+                        prev_error: 0.0,
+                        hysteresis_band: (cached_cfg.hysteresis_low, cached_cfg.hysteresis_high),
+                        ml_slope: cached_cfg.ml_slope,
+                        ml_intercept: cached_cfg.ml_intercept,
+                    };
+                } else {
+                    tracing::warn!("Secure Cache Tampered: pid.json signature mismatch! Re-calibrating...");
+                }
             }
         }
         
@@ -117,6 +165,8 @@ impl PIDController {
             integral: 0.0,
             prev_error: 0.0,
             hysteresis_band: (cfg.hysteresis_low, cfg.hysteresis_high),
+            ml_slope: cfg.ml_slope,
+            ml_intercept: cfg.ml_intercept,
         }
     }
     
@@ -165,9 +215,23 @@ impl PIDController {
             hysteresis_low: target_temp - 2.0,
             hysteresis_high: target_temp + 2.0,
             ema_alpha: 0.2,
+            ml_slope: 1.0 / model.thermal_resistance,
+            ml_intercept: -10.0,
+            signature: None,
         }
     }
     
+    // TODO: Secure Cache Storage (TPM-bound encryption for /var/lib/tesseract/pid.json)
+    fn generate_signature(cfg_json: &[u8]) -> Option<String> {
+        use sha2::{Sha256, Digest};
+        let machine_id = std::fs::read_to_string("/etc/machine-id").unwrap_or_else(|_| "UNSECURE_DEV_MACHINE".to_string());
+        let mut hasher = Sha256::new();
+        hasher.update(machine_id.trim().as_bytes());
+        hasher.update(b"|TESSERACT|");
+        hasher.update(cfg_json);
+        Some(hex::encode(hasher.finalize()))
+    }
+
     fn persist_pid_config(cfg: &PIDConfig) -> std::io::Result<()> {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
@@ -177,7 +241,23 @@ impl PIDController {
         let final_path = "/var/lib/tesseract/pid.json";
         
         let mut tmp = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(tmp_path)?;
-        let data = serde_json::to_vec_pretty(cfg)?;
+        
+        let mut signed_cfg = PIDConfig {
+            p_gain: cfg.p_gain,
+            i_gain: cfg.i_gain,
+            d_gain: cfg.d_gain,
+            hysteresis_low: cfg.hysteresis_low,
+            hysteresis_high: cfg.hysteresis_high,
+            ema_alpha: cfg.ema_alpha,
+            ml_slope: cfg.ml_slope,
+            ml_intercept: cfg.ml_intercept,
+            signature: None,
+        };
+        
+        let raw_data = serde_json::to_vec(&signed_cfg)?;
+        signed_cfg.signature = Self::generate_signature(&raw_data);
+        
+        let data = serde_json::to_vec_pretty(&signed_cfg)?;
         tmp.write_all(&data)?;
         tmp.sync_all()?;
         
@@ -210,17 +290,18 @@ pub struct GlobalContext {
     pub hallucination_threshold: AtomicU32,
     pub thermal_limit_celsius: AtomicU32,
     
+    pub batch_scale: AtomicUsize,
     // [COMMERCIALIZATION TODO]: ABA Prevention Sequence Numbers
     // To prevent ABA race conditions under extreme thread contention, 
     // we must track sequence epochs for the sensory buffers.
     pub event_epoch_seq: AtomicU64,
-    pub vocal_chord: crossbeam::queue::ArrayQueue<u32>,
+    pub vocal_chord: Arc<dyn crate::temporal::EventBus<u32>>,
     pub camera_pos: Mutex<[f32; 3]>,
     pub audio_oscillator_hz: AtomicU32,
     pub consent_flag: Mutex<Option<bool>>,
     pub exiled_nodes: Mutex<Vec<String>>,
     pub causal_feedback_buffer: Mutex<Vec<f32>>,
-    pub sandboxed_payloads: crossbeam::queue::ArrayQueue<Vec<u8>>,
+    pub sandboxed_payloads: Arc<dyn crate::temporal::EventBus<Vec<u8>>>,
 }
 
 impl GlobalContext {
@@ -231,14 +312,15 @@ impl GlobalContext {
             active_tokens: AtomicU32::new(0),
             hallucination_threshold: AtomicU32::new(f32::to_bits(0.85)),
             thermal_limit_celsius: AtomicU32::new(85.0f32.to_bits()), // Default throttle point
+            batch_scale: AtomicUsize::new(1),
             event_epoch_seq: AtomicU64::new(0),
-            vocal_chord: crossbeam::queue::ArrayQueue::new(1024),
+            vocal_chord: Arc::new(crate::temporal::CrossbeamBus::new(1024)),
             camera_pos: Mutex::new([0.0, 0.0, -5.0]),
             audio_oscillator_hz: AtomicU32::new(f32::to_bits(440.0)),
             consent_flag: Mutex::new(None),
             exiled_nodes: Mutex::new(Vec::new()),
             causal_feedback_buffer: Mutex::new(Vec::with_capacity(hidden_size)),
-            sandboxed_payloads: crossbeam::queue::ArrayQueue::new(128),
+            sandboxed_payloads: Arc::new(crate::temporal::CrossbeamBus::new(128)),
         }
     }
 }

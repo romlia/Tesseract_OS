@@ -118,5 +118,9 @@ impl DynamicLoadBalancer {
         // Low-pass filter (EMA) to prevent stutter
         let alpha = 0.05f64;
         self.dt_ms = self.dt_ms * (1.0 - alpha) + (final_target_dt as f64) * alpha;
+        
+        // Safety Envelopes: Clamp between 2.0ms (500 FPS max) and 1000.0ms (1 FPS min)
+        // This prevents PID/thermal runaways from deadlocking the UI thread with impossible target intervals.
+        self.dt_ms = self.dt_ms.clamp(2.0, 1000.0);
     }
 }

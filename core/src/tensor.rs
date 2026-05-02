@@ -12,11 +12,7 @@ pub struct RubiksBlock {
     pub coord: Coordinate,
     pub precision: TensorPrecision,
     pub data_ptr: usize, 
-    
-    // Klein Bottle Consensus (Non-Orientable State Resolution)
-    // When a paradoxical foreign mesh truth is fused, it maps to the inverted manifold.
-    pub inverted_data_ptr: Option<usize>,
-    pub manifold_orientation: f32, // +1.0 = Inside normal, -1.0 = Outside normal
+
 }
 
 /// Z-Order Morton Encoding for O(1) Matrix Scaling
@@ -48,11 +44,6 @@ pub struct RubiksTensor {
     // to load the next mathematical block into the L1 cache *before* the loop requests it,
     // essentially reaching 0ns memory read latency.
     pub blocks: Vec<Option<RubiksBlock>>,
-    // To resolve conflicting "truths" across the decentralized Swarm, the Tensor must support 
-    // a non-orientable 4D topology. Opposing viewpoints from foreign Identity Keys are not deleted; 
-    // they are mathematically mapped to the exact same spatial coordinate within a Klein Bottle manifold.
-    // They coexist simultaneously—one viewed from the "inside" normal, and the other from the "outside"—
-    // allowing the cognitive architecture to hold perfect paradoxical equilibrium without crashing.
 }
 
 impl RubiksTensor {
@@ -87,8 +78,6 @@ impl RubiksTensor {
                         coord: Coordinate(x, y, z),
                         precision,
                         data_ptr: 0,
-                        inverted_data_ptr: None,
-                        manifold_orientation: 1.0,
                     });
                 }
             }

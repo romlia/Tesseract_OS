@@ -39,23 +39,13 @@ struct EngineUniforms {
 fn map(p: vec3<f32>, audio_hz: f32, energy: f32) -> f32 {
     let r1 = 1.0;
     let r2 = 0.3;
-    let a = atan2(p.z, p.x); // Angle around Y axis
     
-    // Twist the space based on cognitive audio frequency and tensor energy (Timeline Bifurcation)
-    let twist = a * 0.5 + audio_hz * 0.005 * energy;
-    let s = q_sin(twist);
-    let c = q_cos(twist);
-    
-    // Torus cross-section
+    // Standard Torus cross-section
     let q = vec2<f32>(length(p.xz) - r1, p.y);
+    let torus_dist = length(q) - r2;
     
-    // Apply mobius twist rotation (Non-Orientable Topology)
-    let q_twisted = vec2<f32>(c * q.x - s * q.y, s * q.x + c * q.y);
-    
-    let klein_dist = length(q_twisted) - r2;
-    
-    // Phase 14: Sonoluminescence (Cymatic Resonance)
-    // The acoustic waveform directly physically perturbs the 4D geometry.
+    // Sonoluminescence (Cymatic Resonance)
+    // The acoustic waveform directly physically perturbs the 3D geometry.
     // If energy (Lyapunov chaos) is high, the geometry violently fractures.
     // If energy is 0.0 (Causal Resonance), it freezes into perfect glass.
     let cymatic_amplitude = energy * 2.0; 
@@ -64,7 +54,7 @@ fn map(p: vec3<f32>, audio_hz: f32, energy: f32) -> f32 {
         q_cos(p.y * (10.0 + audio_hz * 0.007)) * 
         q_sin(p.z * (10.0 + audio_hz * 0.003)) * cymatic_amplitude;
                        
-    return klein_dist + cymatic_displacement;
+    return torus_dist + cymatic_displacement;
 }
 
 @compute @workgroup_size(16, 16)
@@ -96,7 +86,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var d = 0.0;
     var p = vec3<f32>(0.0);
     
-    // Raymarching Loop for 4D Klein Topology (Active State)
+    // Raymarching Loop (Active State)
     // Branchless Execution to Eliminate GPU Warp Divergence
     var active_mask = 1.0;
     for(var i = 0; i < 64; i = i + 1) {

@@ -64,6 +64,7 @@ impl Default for ZeroTrustLedger {
 }
 
 // Phase 13: The Yin-Yang Membrane
+// TODO: Staking Contract Schema (JSON contract parsing for biological staking)
 pub struct YinYangMembrane;
 
 impl YinYangMembrane {
@@ -316,7 +317,7 @@ impl ZeroTrustLedger {
     pub fn process_text_stream(
         &mut self,
         text: &str,
-        bus: &Arc<LockFreeEventBus>,
+        bus: &Arc<dyn prismatic_core::temporal::EventBus<prismatic_core::SensoryEvent>>,
         tokenizer: &Tokenizer,
     ) {
         // Biometric Keystroke Entropy Synthesis

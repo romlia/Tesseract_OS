@@ -46,6 +46,7 @@ pub fn flush_nonce() {
 
 // MAGIC TRICK RETENTION: Use `blake3` crate. BLAKE3 inherently uses SIMD 
 // and AVX2/AVX-512 hardware intrinsics to achieve extreme speeds natively.
+// TODO: Multi-Source Entropy Pool & BLAKE3 (Aggregate RSSI, mic RMS, CPU jitter)
 pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
     #[cfg(feature = "crypto_pki")]
     {
@@ -62,6 +63,7 @@ pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
 }
 
 // Replace SingularityStreamCipher with ChaCha20Poly1305 AEAD.
+// TODO: Cryptographic RNG Integration (Seed ChaCha20 DRBG with RF entropy + TPM secrets)
 pub struct SingularityStreamCipher {
     #[cfg(feature = "crypto_pki")]
     cipher: ChaCha20Poly1305,
@@ -114,6 +116,7 @@ impl SingularityStreamCipher {
         }
     }
 
+    // TODO: Replay Attack Mitigation (Enforce monotonically increasing payload_seq)
     pub fn decrypt(&self, encrypted_data: &[u8], nonce_bytes: &[u8; 12]) -> Option<Vec<u8>> {
         #[cfg(feature = "crypto_pki")]
         {

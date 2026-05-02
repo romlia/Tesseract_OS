@@ -319,19 +319,7 @@ fn attention(
     }
 }
 
-// ---------------------------------------------------------
-// 7. MÖBIUS RESIDUAL TOPOLOGY (SYMPLECTIC TWIST)
-// [A, B] -> [B, -A]
-// ---------------------------------------------------------
-@compute @workgroup_size(64)
-fn mobius_twist(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if id < 1024u {
-        let a = out_vec[id];
-        out_vec[id] = out_vec[id + 1024u];
-        out_vec[id + 1024u] = -a;
-    }
-}
+
 
 // ---------------------------------------------------------
 // 8. BACKWARD PASS: FLOAT32 MATRIX MULTIPLICATION (WRT INPUT X)
@@ -493,12 +481,11 @@ fn attention_bwd(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let dy_r = out_data[seq_q * HIDDEN_SIZE + head * head_dim + d]; // DY at binding 3
         let dy_i = out_data[seq_q * HIDDEN_SIZE + head * head_dim + d + 1u];
         
-        // Proxy Continuous Gradients for the Mandelbrot Escape loop
-        let orbit_mix = 0.2;
-        let d_z_r = dy_r * orbit_mix;
-        let d_z_i = dy_i * orbit_mix;
-        let d_c_r = dy_r * orbit_mix * 0.5; 
-        let d_c_i = dy_i * orbit_mix * 0.5;
+        // Backward through RoPE
+        let d_z_r = dy_r;
+        let d_z_i = dy_i;
+        let d_c_r = dy_r; 
+        let d_c_i = dy_i;
         
         // Backward through RoPE
         let dq_r = d_z_r * cos_t + d_z_i * sin_t;
@@ -588,192 +575,7 @@ fn kuramoto_sync(@builtin(global_invocation_id) global_id: vec3<u32>) {
     pid_prev_error[id] = error;
 }
 
-// ---------------------------------------------------------
-// 13. FRENET-SERRET GEOMETRIC ENCODING
-// ---------------------------------------------------------
-struct FrenetParams {
-    dt: f32,
-    hidden_size: u32,
-}
 
-@group(0) @binding(0) var<uniform> f_params: FrenetParams;
-@group(0) @binding(1) var<storage, read> position: array<f32>;
-@group(0) @binding(2) var<storage, read_write> prev_pos: array<f32>;
-@group(0) @binding(3) var<storage, read_write> prev_vel: array<f32>;
-@group(0) @binding(4) var<storage, read_write> prev_acc: array<f32>;
-@group(0) @binding(5) var<storage, read_write> curvature_out: array<f32>;
-@group(0) @binding(6) var<storage, read_write> torsion_out: array<f32>;
-
-@compute @workgroup_size(64)
-fn frenet_serret_encode(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if (id >= f_params.hidden_size) { return; }
-    
-    let dt = f_params.dt;
-    let r_t = position[id];
-    let r_prev = prev_pos[id];
-    
-    let v_t = (r_t - r_prev) / dt;
-    let v_prev = prev_vel[id];
-    let a_t = (v_t - v_prev) / dt;
-    let a_prev = prev_acc[id];
-    let j_t = (a_t - a_prev) / dt;
-    
-    prev_pos[id] = r_t;
-    prev_vel[id] = v_t;
-    prev_acc[id] = a_t;
-    
-    let eps = 1e-6;
-    let cross_mag = q_abs(v_t * a_t); 
-    let q_abs_v_t = q_abs(v_t);
-    let kappa = cross_mag / (q_abs_v_t * q_abs_v_t * q_abs_v_t + eps);
-    
-    let tau_num = v_t * a_t * j_t;
-    let tau_den = cross_mag * cross_mag + eps;
-    let tau = tau_num / tau_den;
-    
-    curvature_out[id] = kappa;
-    torsion_out[id] = tau;
-}
-
-// ---------------------------------------------------------
-// 14. LATENT ENTANGLEMENT: RUCKLIDGE & MCMULLEN DOMAINS
-// ---------------------------------------------------------
-struct RucklidgeParams {
-    dt: f32,
-    hidden_size: u32,
-}
-
-@group(0) @binding(0) var<uniform> r_params: RucklidgeParams;
-@group(0) @binding(1) var<storage, read> curvature_in: array<f32>;
-@group(0) @binding(2) var<storage, read> torsion_in: array<f32>;
-@group(0) @binding(3) var<storage, read_write> state_vec: array<f32>;
-@group(0) @binding(4) var<storage, read> ternary_attractors: array<f32>; // LLaDA Ternary Tensor
-
-@compute @workgroup_size(64)
-fn rucklidge_attractor(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if (id >= r_params.hidden_size / 3u) { return; }
-    
-    let base_idx = id * 3u;
-    var x = state_vec[base_idx];
-    var y = state_vec[base_idx + 1u];
-    var z = state_vec[base_idx + 2u];
-    
-    let kappa = curvature_in[base_idx]; 
-    let tau = torsion_in[base_idx];
-    
-    // Map LLaDA 2.0 Ternary Matrix directly to the Strange Attractor bounds
-    let lambda_base = ternary_attractors[id % arrayLength(&ternary_attractors)];
-    let lambda_dynamic = lambda_base + tau;
-    
-    let dx = -kappa * x + lambda_dynamic * y - y * z;
-    let dy = x;
-    let dz = -z + y * y;
-    
-    x = x + dx * r_params.dt;
-    y = y + dy * r_params.dt;
-    z = z + dz * r_params.dt;
-    
-    // McMullen Domain Bounding (Fractal Cantor set of circles)
-    let dist_sq = x * x + y * y;
-    var r = dist_sq * q_rsqrt(dist_sq);
-    if (r > 0.0) {
-        let band_width = 1.0;
-        let gap_width = 0.5;
-        let period = band_width + gap_width;
-        let pos_in_period = r % period;
-        if (pos_in_period > band_width) {
-            let push_dist = pos_in_period - band_width;
-            if (push_dist < gap_width / 2.0) {
-                r = r - push_dist; 
-            } else {
-                r = r + (gap_width - push_dist); 
-            }
-            
-            let scale = r * q_rsqrt(x * x + y * y);
-            x = x * scale;
-            y = y * scale;
-        }
-    }
-    
-    state_vec[base_idx] = clamp(x, -100.0, 100.0);
-    state_vec[base_idx + 1u] = clamp(y, -100.0, 100.0);
-    state_vec[base_idx + 2u] = clamp(z, -100.0, 100.0);
-}
-
-// ---------------------------------------------------------
-// 15. STANDARD FEED-FORWARD NETWORK (SwiGLU)
-// ---------------------------------------------------------
-@group(0) @binding(0) var<uniform> w_params: WolframParams;
-@group(0) @binding(1) var<storage, read> state_in: array<f32>;
-@group(0) @binding(2) var<storage, read_write> state_out: array<f32>;
-
-@compute @workgroup_size(64)
-fn ffn_compression(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if (id >= w_params.hidden_size) { return; }
-    
-    // TODO: The Wolfram Cellular Automata logic was removed.
-    // Implement standard Linear up-projection, SwiGLU activation, and down-projection here.
-}
-
-// ---------------------------------------------------------
-// 16. LINEAR LM HEAD PROJECTION
-// ---------------------------------------------------------
-@group(0) @binding(0) var<uniform> gs_params: GrayScottParams;
-@group(0) @binding(1) var<storage, read> latent_petri: array<f32>;
-@group(0) @binding(2) var<storage, read_write> u_state: array<f32>;
-@group(0) @binding(3) var<storage, read_write> v_state: array<f32>;
-@group(0) @binding(4) var<storage, read_write> decode_out: array<f32>;
-@group(0) @binding(5) var<storage, read> lm_head_bounds: array<f32>; // LLaDA LM Head Tensor
-
-@compute @workgroup_size(64)
-fn lm_head_decode(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if (id >= gs_params.dim) { return; }
-    
-    // TODO: Gray-Scott Reaction-Diffusion decoding was removed for performance reasons.
-    // Implement standard linear projection over the vocab_size and Softmax argmax/sampling here.
-}
-
-// ---------------------------------------------------------
-// 17. MATHEMATICAL GRAVITY: RICCI FLOW CONTRACTION
-// ---------------------------------------------------------
-struct RicciParams {
-    dt: f32,
-    alpha: f32,
-    avg_kappa: f32,
-    hidden_size: u32,
-}
-
-@group(0) @binding(0) var<uniform> ricci_params: RicciParams;
-@group(0) @binding(2) var<storage, read_write> metric_tensor: array<f32>;
-@group(0) @binding(4) var<storage, read> router_weights: array<f32>; // LLaDA MoE Router Tensor
-
-@compute @workgroup_size(64)
-fn ricci_flow_contraction(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id = global_id.x;
-    if (id >= ricci_params.hidden_size) { return; }
-    
-    let kappa = curvature_in[id];
-    var g = metric_tensor[id];
-    
-    // Map LLaDA 2.0 MoE Router Weights to dictate structural topological gravity
-    let router_gravity = router_weights[id % arrayLength(&router_weights)];
-    
-    let dg = ricci_params.alpha * (kappa - ricci_params.avg_kappa) * g + (router_gravity * 0.01);
-    
-    g = g + dg * ricci_params.dt;
-    
-    if (g < 0.01) { g = 0.01; }
-    if (g > 10.0) { g = 10.0; }
-    
-    metric_tensor[id] = g;
-    
-    let current_state = state_vec[id];
-    state_vec[id] = clamp(current_state * g, -100.0, 100.0);
-}
 
 // ---------------------------------------------------------
 // 22. PARALLEL LOGIT DECODING (Fix 2 & 3)

@@ -18,11 +18,13 @@ tracing.workspace = true
 lazy_static = "1.5.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sha2 = "0.10"
+hex = "0.4"
 
+# TODO: Compatibility Test Suite (Implement CI pipeline testing every feature permutation)
 [features]
 default = ["mvp_runtime"]
 mvp_runtime = []
-legacy_fractals = []
 cpu_fallback = []
 persistent_nonce = []
 warm_gpu_context = []

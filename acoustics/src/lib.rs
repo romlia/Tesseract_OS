@@ -35,7 +35,7 @@ fn q_cos(x: f32) -> f32 {
     q_sin(x + 1.57079632679)
 }
 /// Bi-directional Acoustic Sensory Organ
-pub fn run_cpal_gradient_loop(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) {
+pub fn run_cpal_gradient_loop(bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) {
     loop {
         if prismatic_core::SHUTDOWN.load(Ordering::Relaxed) { break; }
         tracing::info!("Attempting to bind bi-directional acoustic sensory organ...");
@@ -52,7 +52,7 @@ pub fn run_cpal_gradient_loop(bus: Arc<LockFreeEventBus>, state: Arc<GlobalConte
     }
 }
 
-fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) -> anyhow::Result<()> {
+fn try_open_cpal_stream(bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) -> anyhow::Result<()> {
     let host = cpal::default_host();
     let mic = host
         .default_input_device()
@@ -101,6 +101,7 @@ fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) -
                 let gpu_thermal_celsius = f32::from_bits(state.gpu_thermal_celsius.load(Ordering::Relaxed));
                 
                 // Dynamic Biquad IIR Filter Coefficients (Low-Pass Filter)
+                // TODO: Pitch Smoothing Filter (EMA on temperature-vs-pitch conversion)
                 // Cutoff frequency drops as gpu_thermal_celsius rises to absorb thermal Re-entry spikes
                 let cutoff = 2000.0 - (gpu_thermal_celsius * 10.0).clamp(0.0, 1900.0);
                 let w0 = 2.0 * std::f32::consts::PI * cutoff / sample_rate;
@@ -117,6 +118,7 @@ fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) -
                     let t = sample_clock / sample_rate;
 
                     // SIMD Chebyshev Polynomial Exciter (Bosonic String Synthesis)
+                    // TODO: Anti-Aliased Oscillator (Band-limited wavetable exciter)
                     // Instead of loading wavetables from memory, compute Chebyshev T_n(x) natively
                     let x_phase = q_sin(t * target_hz * 2.0 * std::f32::consts::PI);
                     

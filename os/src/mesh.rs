@@ -30,6 +30,7 @@ pub fn carnot_efficiency(t_hot: f32, t_cold: f32) -> f32 {
 // ----------------------------------------------------------------
 // PHASE 9: THE BIOMETRIC mDNS SWARM (Cryptographic DNS Firewall)
 // ----------------------------------------------------------------
+// TODO: Gossip-Based Reputation Protocol (Local peer-reputation scoring)
 pub fn spawn_biometric_mdns_spore(local_identity_key: [u8; 32]) {
     tracing::info!("Deploying Biometric mDNS Spore (Zero-Configuration Zero-Trust)...");
     
@@ -182,6 +183,7 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
                         efficiency, barycentric_route[0], barycentric_route[1], barycentric_route[2]);
                         
                     // 3. Raft Consensus Voting Logic (Seed IQ Multi-Agent)
+                    // TODO: BFT Consensus Roadmap (Architecture for transitioning from gossip to Tendermint)
                     if payload_str.contains("RAFT_VOTE_REQ") {
                         if foreign_heat < local_heat {
                             tracing::info!("Raft Consensus: Voting for Leader [{}] (Thermodynamic Advantage: {:.2} < {:.2})", src, foreign_heat, local_heat);
@@ -190,6 +192,8 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
                     }
 
                     // Push to the sandbox for Thermodynamic Filtering
+                    // TODO: Thermodynamic Cost Estimator (Calculate ΔT based on model layer dimensions)
+                    // TODO: Predictive Sandboxing (Reject payloads if ΔT exceeds thermal headroom)
                     let _ = _state_rx.sandboxed_payloads.push(payload_str.to_string().into_bytes());
                 } else {
                     tracing::debug!("Carnot Efficiency too low ({:.2}). Load balancer rejecting payload.", efficiency);
