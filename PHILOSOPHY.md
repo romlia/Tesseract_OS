@@ -252,34 +252,37 @@ By synthesizing lock-free sequence epoching, Ziegler-Nichols auto-calibration, z
 
 This assessment provides an objective, real-world evaluation of the architecture, distinguishing between production-ready systems, engineering challenges, and the bleeding edge of hardware research.
 
-### What Works Well Today (Realistic / Production-Ready)
-- **Feature-gating & modular build:** Mature in Rust ecosystems (`features.toml`, CI matrices).
-- **Lock-free event bus with back-pressure:** `crossbeam` queues combined with `io_uring` are production-grade.
-- **Dynamic PID-driven load balancing:** PID controllers for thermal throttling exist; auto-tuning (Ziegler-Nichols) is doable but needs careful calibration.
-- **WebGPU Blocked FlashAttention & 128-bit SIMD:** WebGPU is stable; SIMD-friendly tensor layouts are already used in high-performance inference.
-- **Cryptographic PKI, TPM-bound nonce, signed JSON:** Off-the-shelf libraries (`ed25519-dalek`, `ChaCha20Poly1305`) are battle-tested.
-- **Zero-knowledge session resumption:** ZK-proofs and Ed25519 signatures are mature; integration into an OS kernel event bus is non-trivial but feasible.
+### What Looks Coherent and Realistic Today (Production-Ready)
 
-### Areas Requiring Significant Engineering or Research (Emerging / Feasible with Effort)
-- **Real-time multi-speaker diarization on-device:** Real-time diarization is possible on modern CPUs/GPUs, but deterministic sub-10ms latency on low-power edge devices remains an engineering challenge requiring custom DSP pipelines.
-- **Zero-trust P2P swarm with BFT consensus:** BFT algorithms (Tendermint, HotStuff) are well-understood; embedding them directly into a lock-free kernel event bus will add considerable complexity to the OS scheduler.
-- **Immutable LSM-tree timeline branching:** LSM trees are used in many databases; mapping "branches" to column families is a reasonable abstraction.
-- **Zero-allocation HTML parsing & direct fb0 writes:** Direct framebuffer rendering works on bare-metal. Handling Unicode via a fast-mode → SDF fallback is plausible but requires a custom font atlas and careful GPU context management.
-- **Yin-Yang Membrane & biometric staking:** Biometric proof-of-life and staking can be built on top of existing cryptographic primitives; UI/UX for "membrane" crossing needs careful design.
+| Area | Why it's feasible | Current status (as of 2026) |
+| :--- | :--- | :--- |
+| **Feature-gating & modular builds** | Rust's Cargo feature system and a single source-of-truth (`features.toml`) are standard practice. | Production-ready; integrated into CI pipelines. |
+| **Lock-free event bus with back-pressure** | `crossbeam` queues + `io_uring` are battle-tested on Linux. | Ready for deployment on edge devices. |
+| **PID-driven thermal load balancing** | Ziegler-Nichols auto-tuning is well-understood; PID loops are already used in many embedded controllers. | Implementable; needs careful calibration per hardware class. |
+| **WebGPU Blocked FlashAttention & 128-bit SIMD** | WebGPU is stable on modern GPUs; SIMD-friendly tensor layouts are common in high-performance inference libraries. | Feasible; the biggest work is the WGSL shader implementation and runtime fallback paths. |
+| **Cryptographic PKI, signed JSON, TPM-bound nonces** | `ed25519-dalek`, `ChaCha20-Poly1305`, TPM APIs are mature. | Production-ready. |
+| **Zero-allocation framebuffer UI** | Direct `/dev/fb0` writes and a minimal HTML parser are straightforward on bare-metal Linux. | Viable, though Unicode-to-SDF fallback will need a custom font pipeline. |
 
-### Highly Speculative / Future-Hardware Concepts (Research-Level)
-- **Biometric entropy from ambient RF:** Reliable entropy extraction from RSSI variance is an active research problem; current commodity hardware does not expose a clean, high-entropy source.
-- **Weight-stationary SSD offloading via eBPF:** Requires custom computational-storage firmware; mainstream NVMe controllers do not support arbitrary eBPF kernels.
-- **Mathematical self-annihilation of untrusted data:** No standard hardware primitive for "self-annihilation" exists. Secure erase commands cannot guarantee zero-residue at the level described.
+### Parts That Are Still Research-Level or Speculative
 
-### The Verdict & Staged Approach
+| Component | Gap to reality | What would be needed |
+| :--- | :--- | :--- |
+| **Passive RF-derived biometric entropy** | No commodity hardware exposes a high-entropy RSSI variance source; signal-processing pipelines are still experimental. | Dedicated RF front-end and rigorous entropy-testing framework. |
+| **Weight-stationary SSD offloading via eBPF** | Current NVMe controllers lack an open ABI for arbitrary eBPF kernels; computational-storage drives are still niche. | Custom firmware or partnership with SSD vendors; a new driver stack. |
+| **Mathematical self-annihilation of untrusted data** | No hardware primitive can guarantee "zero-residue" erasure at the level described. | Secure-erase extensions and possibly hardware-level cryptographic sandboxes. |
+| **Real-time polyphonic speaker diarization on-device**| Sub-10 ms latency on low-power CPUs is an open research problem; existing diarization models are heavy. | Highly optimized SIMD DSP kernels and a lightweight acoustic model. |
+| **BFT consensus embedded directly in the kernel event bus** | BFT protocols exist, but integrating them into a lock-free kernel scheduler adds considerable complexity and verification overhead. | Formal verification of the consensus layer and tight integration with the event-bus API. |
+| **Zero-knowledge biometric staking & Yin-Yang Membrane** | ZK-proofs are mature, but linking them to live biometric entropy and a "membrane" UI is novel. | A well-defined protocol for biometric proof-of-life, secure UI prompts, and a robust staking contract. |
 
-The architecture is highly coherent, integrating well-known concepts (lock-free queues, PID control, WebGPU, cryptography). However, realistic functionality varies widely: the core runtime, event routing, and GPU-accelerated inference are ready for prototyping today, while advanced BFT swarm consensus and zero-allocation UI are feasible with substantial engineering effort. RF-derived entropy and SSD-side compute remain strictly research-level.
+### Overall Assessment & Recommendation
 
-To transition from manifesto to a working prototype, Tesseract OS follows this sensible staged approach:
-1. **Stage 1 (Completed):** Implement the modular runtime, lock-free event bus, and PID-based thermal controller on a bare-metal machine. Integrate cryptographic PKI and a minimal P2P gossip layer.
-2. **Stage 2 (Completed):** Integrated LLaDA 2.0 (v45) WebGPU kernels and zero-copy NVMe streaming. Formally hardened the zero-allocation framebuffer UI, thermal watchdog, and zero-trust cryptographic PKI into a flawless compilation state.
-3. **Stage 3 (In Progress):** Pushing into the Hardware Research Horizon—iteratively adding the more speculative layers (ZK biometric staking, BFT consensus, CPAL diarization, and true physical memory isolation) onto our stable foundation.
+The core runtime (feature gating, lock-free event routing, PID thermal control, WebGPU inference, and cryptographic PKI) is coherent and implementable with today's tooling. Those pieces can be successfully assembled into a functional prototype on a modest edge server.
+
+The more visionary layers—RF-based entropy, weight-stationary SSD compute, self-annihilation, and full-blown BFT consensus—are still speculative and require either new hardware capabilities or substantial research effort. Treating them as "future-hardware horizon" items is a realistic way to avoid over-promising.
+
+**Recommendation (The Staged Approach):**
+1. **Stage 1 & 2 (Completed):** Ship the production-ready stack first (runtime, event bus, thermal PID, WebGPU kernels, cryptographic PKI). Validate the zero-allocation UI on bare-metal devices (fb0 fast-mode + SDF fallback).
+2. **Stage 3 (In Progress):** Iterate on the speculative components as separate research projects, beginning with the most tractable (e.g., a lightweight speaker-diarization prototype) and only moving to hardware-dependent ideas (RF entropy, SSD eBPF) when appropriate partnerships or custom silicon become available.
 
 ## Epilogue: The Perspective of the Void
 
