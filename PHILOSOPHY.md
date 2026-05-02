@@ -243,26 +243,38 @@ Tesseract OS is a marvel of focused engineering. While it scales to meet the dem
 
 By synthesizing lock-free sequence epoching, Ziegler-Nichols auto-calibration, zero-latency WebGPU fallbacks, atomically-secure swarm cryptography, and democratic network exile, Tesseract OS redefines what is possible across the entire spectrum of computing—from the humblest personal device to the commercial Edge.
 
-## Feasibility Audit (2026)
-This matrix provides an objective, real-world assessment of the architecture, distinguishing between production-ready systems and the bleeding edge of hardware research.
+## 24. Strategic Roadmap & Feasibility Audit (2026)
 
-| Architectural Area | Real-World Feasibility | Technical Assessment |
-| :--- | :--- | :--- |
-| **Feature-gating & modular build system** | <span style="color:green">**High**</span> | Using a `features.toml` and CI matrix is standard practice in Rust ecosystems. |
-| **Lock-free event bus with back-pressure** | <span style="color:green">**High**</span> | `crossbeam` queues combined with `io_uring` are mature, production-ready technologies. |
-| **Dynamic load-balancing & PID-driven `dt_ms`** | <span style="color:green">**High**</span> | Adaptive scheduling based on CPU/GPU temperature is highly feasible. |
-| **WebGPU Blocked FlashAttention & 128-bit SIMD** | <span style="color:green">**High**</span> | WebGPU is stable; SIMD-friendly data layouts are already utilized in production engines. |
-| **Cryptographic PKI, TPM-bound nonce, signed JSON** | <span style="color:green">**High**</span> | Standard primitives (`ed25519-dalek`, `ChaCha20Poly1305`) are native to modern systems. |
-| **Zero-knowledge session resumption** | <span style="color:green">**High**</span> | ZK-proofs and Ed25519 signatures are mature. |
-| **Thermal PID auto-tuning (Ziegler-Nichols)** | <span style="color:orange">**Medium-High**</span> | Auto-tuning is doable, though the “ultimate gain” requires careful physical calibration. |
-| **Polyphonic speaker diarization on-device** | <span style="color:orange">**Medium-High**</span> | Achieving deterministic sub-10ms latency on low-power edge CPUs remains a tight constraint. |
-| **Zero-trust P2P swarm with BFT consensus** | <span style="color:orange">**Medium-High**</span> | Integrating BFT (Tendermint/HotStuff) directly into an OS kernel event-bus is non-trivial. |
-| **Immutable LSM-tree timeline branching** | <span style="color:orange">**Medium-High**</span> | Mapping temporal timelines to column families is a powerful, reasonable abstraction. |
-| **Zero-allocation HTML parser & direct fb0 writes** | <span style="color:orange">**Medium**</span> | Direct framebuffer rendering is possible on bare-metal, but Unicode fallback adds complexity. |
-| **Yin-Yang Membrane & biometric staking** | <span style="color:orange">**Medium**</span> | The concept is implementable, though UX fluidity and absolute security require careful design. |
-| **Biometric entropy from ambient RF / heartbeat** | <span style="color:red">**Low-Medium**</span> | Extracting reliable entropy from RSSI variance is an active signal-processing research problem. |
-| **Weight-stationary SSD offloading via eBPF** | <span style="color:red">**Low**</span> | Requires custom hardware or deep vendor partnerships to program NVMe controllers. |
-| **Mathematical self-annihilation of untrusted data** | <span style="color:red">**Low**</span> | A true hardware-level “self-annihilation” primitive is not a standard ATA/NVMe command. |
+This assessment provides an objective, real-world evaluation of the architecture, distinguishing between production-ready systems, engineering challenges, and the bleeding edge of hardware research.
+
+### What Works Well Today (Realistic / Production-Ready)
+- **Feature-gating & modular build:** Mature in Rust ecosystems (`features.toml`, CI matrices).
+- **Lock-free event bus with back-pressure:** `crossbeam` queues combined with `io_uring` are production-grade.
+- **Dynamic PID-driven load balancing:** PID controllers for thermal throttling exist; auto-tuning (Ziegler-Nichols) is doable but needs careful calibration.
+- **WebGPU Blocked FlashAttention & 128-bit SIMD:** WebGPU is stable; SIMD-friendly tensor layouts are already used in high-performance inference.
+- **Cryptographic PKI, TPM-bound nonce, signed JSON:** Off-the-shelf libraries (`ed25519-dalek`, `ChaCha20Poly1305`) are battle-tested.
+- **Zero-knowledge session resumption:** ZK-proofs and Ed25519 signatures are mature; integration into an OS kernel event bus is non-trivial but feasible.
+
+### Areas Requiring Significant Engineering or Research (Emerging / Feasible with Effort)
+- **Real-time multi-speaker diarization on-device:** Real-time diarization is possible on modern CPUs/GPUs, but deterministic sub-10ms latency on low-power edge devices remains an engineering challenge requiring custom DSP pipelines.
+- **Zero-trust P2P swarm with BFT consensus:** BFT algorithms (Tendermint, HotStuff) are well-understood; embedding them directly into a lock-free kernel event bus will add considerable complexity to the OS scheduler.
+- **Immutable LSM-tree timeline branching:** LSM trees are used in many databases; mapping "branches" to column families is a reasonable abstraction.
+- **Zero-allocation HTML parsing & direct fb0 writes:** Direct framebuffer rendering works on bare-metal. Handling Unicode via a fast-mode → SDF fallback is plausible but requires a custom font atlas and careful GPU context management.
+- **Yin-Yang Membrane & biometric staking:** Biometric proof-of-life and staking can be built on top of existing cryptographic primitives; UI/UX for "membrane" crossing needs careful design.
+
+### Highly Speculative / Future-Hardware Concepts (Research-Level)
+- **Biometric entropy from ambient RF:** Reliable entropy extraction from RSSI variance is an active research problem; current commodity hardware does not expose a clean, high-entropy source.
+- **Weight-stationary SSD offloading via eBPF:** Requires custom computational-storage firmware; mainstream NVMe controllers do not support arbitrary eBPF kernels.
+- **Mathematical self-annihilation of untrusted data:** No standard hardware primitive for "self-annihilation" exists. Secure erase commands cannot guarantee zero-residue at the level described.
+
+### The Verdict & Staged Approach
+
+The architecture is highly coherent, integrating well-known concepts (lock-free queues, PID control, WebGPU, cryptography). However, realistic functionality varies widely: the core runtime, event routing, and GPU-accelerated inference are ready for prototyping today, while advanced BFT swarm consensus and zero-allocation UI are feasible with substantial engineering effort. RF-derived entropy and SSD-side compute remain strictly research-level.
+
+To transition from manifesto to a working prototype, Tesseract OS follows this sensible staged approach:
+1. **Stage 1 (Completed):** Implement the modular runtime, lock-free event bus, and PID-based thermal controller on a bare-metal machine. Integrate cryptographic PKI and a minimal P2P gossip layer.
+2. **Stage 2 (In Progress):** Add WebGPU FlashAttention kernels and benchmark inference latency. Prototype the zero-allocation framebuffer UI with a simple fast-mode renderer.
+3. **Stage 3 (Future):** Iteratively add the more speculative layers (biometric staking, membrane device, full BFT consensus) once the foundation is absolutely stable.
 
 ## Epilogue: The Perspective of the Void
 

@@ -161,6 +161,7 @@ fn try_open_cpal_stream(bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>
             let (slice1, slice2) = chunk.as_slices();
 
             // SIMD Speaker Diarization
+            // TODO[P2]: Implement real-time multi-speaker diarization using SIMD-accelerated clustering for deterministic sub-10ms latency.
             // Integrate SIMD-accelerated k-means clustering algorithm to physically separate concurrent voice sources 
             // before they hit the event bus for polyphonic multiplexing.
             // For now, this is mocked as mapping everything to "User_0".

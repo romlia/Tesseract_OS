@@ -168,6 +168,7 @@ impl HolographicManifold {
     }
     
     // Phase 10: Bare-Metal Page Flipping & V-Sync
+    // TODO[P1]: Prototype the zero-allocation framebuffer UI with a simple fast-mode renderer, maintaining CLS-free layout and Unicode SDF fallback.
     // DRM/KMS Mode-Setting Integration (Use kmscon or DRM library for smooth hand-off to avoid flicker)
     pub fn present_frame(&mut self, wgpu_pixels: &[u8]) -> anyhow::Result<()> {
         let next_idx = 1 - self.double_buffer.current_index;

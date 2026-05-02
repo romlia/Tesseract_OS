@@ -100,6 +100,7 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
     // Receiver Loop (The Cognitive Membrane & Mirror Dimension)
     
     // BFT Consensus Roadmap (Tendermint/HotStuff)
+    // TODO[P2]: Integrate BFT consensus directly into the lock-free kernel event bus to replace the simple gossip layer.
     pub struct BftNode {
         pub active: bool,
         pub current_view: u64,
