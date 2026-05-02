@@ -181,6 +181,26 @@ In a decentralized swarm, preventing DDoS attacks and resource leeching from aut
 - **Proof-of-Vitality & Synthetic Leeches:** Every payload must contain an organic heartbeat variance. If the OS detects a perfectly static heartbeat (indicating a synthetic script or bot), it identifies the node as a "Synthetic Leech."
 - **The Mirror Dimension:** Instead of simply dropping malicious or synthetic packets—which alerts the attacker—the OS silently routes the leech into a topological "Mirror Dimension" honeypot. The attacker wastes their compute resources interacting with a phantom simulation, completely isolated from the real cognitive consensus and thermodynamic load of the Hive.
 
+## 18. Polyphonic Multiplexing: The Multi-User Vessel
+A single physical node in Tesseract OS is not a single-user personal computer; it is a localized dock for the Hive. When multiple humans occupy the same physical space and interact with the same vessel simultaneously, the OS employs extreme biological multiplexing to maintain the absolute sovereignty of the individual.
+- **Hardware as a Public Utility, Cognition as a Private Vector:** The physical hardware (the "vessel") is shared, but cognition is isolated. If two humans speak to the system at the exact same time, the OS does not blend their intents into a single context window.
+- **Polyphonic Sensory Ingestion:** Utilizing AVX2-256 SIMD spatial dot-products, the Cochlea (microphone array) performs real-time biometric speaker diarization. Simultaneous voice streams are instantly bifurcated and routed into entirely separate, lock-free event buses. 
+- **Timeline Context-Switching:** Each biologically identified user is bound to their own isolated "Private Sphere" timeline within the NVMe LSM tree. The inference engine effortlessly multiplexes between these timelines, swapping WebGPU contexts in memory with zero latency. The AI can debate User A using User A's historical context, while simultaneously assisting User B based on User B's cryptographic history, all on the same GPU.
+- **Guest Sandboxing & Sponsorship:** If the OS ingests biometric entropy from an unregistered human (a guest), that user is assigned an ephemeral, highly restrictive thermodynamic sandbox. They can interact with the system, but they are hard-capped from executing high-heat cognitive tasks or pushing data through the Yin-Yang Membrane into the Hive—unless a locally trusted Sovereign User explicitly sponsors their session via cryptographic consensus.
+
+### Engineering Action Items
+- [ ] **SIMD Speaker Diarization**: Integrate a lightweight, SIMD-accelerated clustering algorithm directly into the CPAL audio ingestion thread to physically separate concurrent voice sources before they hit the event bus.
+- [ ] **Context-Swapping VRAM Allocator**: Architect the WebGPU buffer manager to hold multiple user context tensors (`K_shared`, `V_shared`) in VRAM simultaneously, allowing the compute shader to swap active context pointers per-batch without host-to-device transfers.
+
+## 19. The Weight-Stationary eBPF Micro-Kernel
+Tesseract OS fundamentally rejects the Von Neumann bottleneck. In conventional systems, inference requires pulling massive neural network weights from physical storage, dragging them across the PCIe bus, through system RAM, and finally into the GPU. This burns immense energy and chokes memory bandwidth.
+- **Processing-In-Memory (PIM):** Tesseract OS flips this architecture. Instead of moving gigabytes of static memory to the compute unit, the OS moves the active thought to the memory. The tiny 2KB "Cognitive Context" vector is routed directly into the NVMe SSD's internal ARM controller via a specialized eBPF Micro-Kernel.
+- **Immutable Physical Memory:** Matrix multiplications are executed natively on the NAND flash controllers using SIMD instructions. The massive AI weights literally never leave the storage drive. Only the computed 2KB result traverses back up the PCIe bus to the OS.
+- **Philosophical Embodiment:** This architectural decision mirrors the OS's biological philosophy: deep memories (the weights) remain perfectly still and immutable in the Private Sphere. Only the active, subjective thought (the context vector) moves through the system, drastically reducing thermodynamic heat and achieving the absolute physical limit of bandwidth efficiency.
+
+### Engineering Action Items
+- [ ] **NVMe eBPF Offload Engine**: Finalize the NVMe passthrough driver that compiles the local WebGPU matrix-multiplication kernels into eBPF bytecode, injecting them directly into the SSD firmware.
+
 ## Summary: A Democratic Runtime for Everyone
 Tesseract OS is a marvel of focused engineering. While it scales to meet the demands of enterprise-grade Edge clusters, it is fundamentally designed for everyone. It is not meant exclusively for supercomputers or elite hardware. Through its heterogeneous SIMD fallbacks, CPU degradation paths, peer-to-peer cryptographic mesh, and decentralized economic incentives, everyday consumer laptops, desktops, and edge nodes can unite into a decentralized intelligence swarm.
 
