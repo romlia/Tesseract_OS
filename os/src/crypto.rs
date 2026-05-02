@@ -53,10 +53,21 @@ pub fn flush_nonce() {
 pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
     #[cfg(feature = "crypto_pki")]
     {
-        let cpu_jitter = std::time::Instant::now().elapsed().as_nanos() as u64; // Mock generic entropy
+        // Secure Hardware Entropy via TPM 2.0 TRNG
+        let mut entropy = [0u8; 32];
+        if let Ok(mut hwrng) = std::fs::File::open("/dev/hwrng") {
+            use std::io::Read;
+            if hwrng.read_exact(&mut entropy).is_err() {
+                use rand::RngCore;
+                rand::thread_rng().fill_bytes(&mut entropy);
+            }
+        } else {
+            use rand::RngCore;
+            rand::thread_rng().fill_bytes(&mut entropy);
+        }
         let mut hasher = blake3::Hasher::new();
         hasher.update(data);
-        hasher.update(&cpu_jitter.to_le_bytes());
+        hasher.update(&entropy);
         *hasher.finalize().as_bytes()
     }
     #[cfg(not(feature = "crypto_pki"))]

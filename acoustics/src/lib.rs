@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
-use prismatic_core::temporal::LockFreeEventBus;
+use prismatic_core::bus::LockFreeEventBus;
 
 fn q_rsqrt(number: f32) -> f32 {
     let mut y = number;
@@ -36,7 +36,7 @@ fn q_cos(x: f32) -> f32 {
     q_sin(x + 1.57079632679)
 }
 /// Bi-directional Acoustic Sensory Organ
-pub fn run_cpal_gradient_loop(bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) {
+pub fn run_cpal_gradient_loop(bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) {
     loop {
         if prismatic_core::SHUTDOWN.load(Ordering::Relaxed) { break; }
         tracing::info!("Attempting to bind bi-directional acoustic sensory organ...");
@@ -53,7 +53,7 @@ pub fn run_cpal_gradient_loop(bus: Arc<dyn prismatic_core::temporal::EventBus<Se
     }
 }
 
-fn try_open_cpal_stream(bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) -> anyhow::Result<()> {
+fn try_open_cpal_stream(bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>>, state: Arc<GlobalContext>) -> anyhow::Result<()> {
     let host = cpal::default_host();
     let mic = host
         .default_input_device()

@@ -7,283 +7,11 @@ use std::io::Read;
 use std::sync::atomic::Ordering;
 use rayon::prelude::*;
 
-// MAGIC TRICK: Auto-Vectorize via SIMD
-// YMM hardware registers process 8 tokens simultaneously in the same clock cycle.
-#[inline(always)]
-fn q_abs(x: f32) -> f32 {
-    f32::from_bits(x.to_bits() & 0x7FFFFFFF)
-}
-
-#[inline(always)]
-fn q_sign(x: f32) -> f32 {
-    f32::from_bits((x.to_bits() & 0x80000000) | 0x3F800000)
-}
-
-#[inline(always)]
-fn q_sin(x: f32) -> f32 {
-    let pi = std::f32::consts::PI;
-    let period = 2.0 * pi;
-    let mut x_mod = x - period * (x / period).floor();
-    if x_mod > pi {
-        x_mod -= period;
-    }
-    let mut sin_x = (4.0 / pi) * x_mod - (4.0 / (pi * pi)) * x_mod * q_abs(x_mod);
-    sin_x = 0.225 * (sin_x * q_abs(sin_x) - sin_x) + sin_x;
-    sin_x
-}
-
-/// Safety Net AVX2 8-way Parallel Sine
-/// If AVX2 is present, executes native SIMD. Otherwise loops scalar `q_sin`.
-#[inline(always)]
-pub fn q_sin_8x(data: &mut [f32]) {
-    let mut i = 0;
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("avx2") {
-            unsafe {
-                use core::arch::x86_64::*;
-                // SIMD Constants
-                let pi = _mm256_set1_ps(std::f32::consts::PI);
-                let period = _mm256_set1_ps(2.0 * std::f32::consts::PI);
-                let inv_period = _mm256_set1_ps(1.0 / (2.0 * std::f32::consts::PI));
-                let c_4_pi = _mm256_set1_ps(4.0 / std::f32::consts::PI);
-                let c_4_pi_sq = _mm256_set1_ps(4.0 / (std::f32::consts::PI * std::f32::consts::PI));
-                let c_0_225 = _mm256_set1_ps(0.225);
-                let abs_mask = _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF_u32 as i32));
-
-                while i + 8 <= data.len() {
-                    let x = _mm256_loadu_ps(data.as_ptr().add(i));
-                    
-                    // x_mod = x - period * floor(x / period)
-                    let div = _mm256_mul_ps(x, inv_period);
-                    let floor = _mm256_floor_ps(div);
-                    let rem = _mm256_mul_ps(period, floor);
-                    let mut x_mod = _mm256_sub_ps(x, rem);
-                    
-                    // if x_mod > pi { x_mod -= period }
-                    let cmp = _mm256_cmp_ps(x_mod, pi, _CMP_GT_OQ);
-                    let sub = _mm256_and_ps(cmp, period);
-                    x_mod = _mm256_sub_ps(x_mod, sub);
-                    
-                    // abs(x_mod)
-                    let abs_x_mod = _mm256_and_ps(x_mod, abs_mask);
-                    
-                    // sin_x = (4/pi)*x_mod - (4/pi^2)*x_mod*abs(x_mod)
-                    let p1 = _mm256_mul_ps(c_4_pi, x_mod);
-                    let p2 = _mm256_mul_ps(_mm256_mul_ps(c_4_pi_sq, x_mod), abs_x_mod);
-                    let mut sin_x = _mm256_sub_ps(p1, p2);
-                    
-                    // sin_x = 0.225 * (sin_x * abs(sin_x) - sin_x) + sin_x
-                    let abs_sin_x = _mm256_and_ps(sin_x, abs_mask);
-                    let t1 = _mm256_mul_ps(sin_x, abs_sin_x);
-                    let t2 = _mm256_sub_ps(t1, sin_x);
-                    let t3 = _mm256_mul_ps(c_0_225, t2);
-                    sin_x = _mm256_add_ps(t3, sin_x);
-                    
-                    _mm256_storeu_ps(data.as_mut_ptr().add(i), sin_x);
-                    i += 8;
-                }
-            }
-        }
-    }
-    
-    // Scalar fallback for remainder or incompatible CPUs
-    while i < data.len() {
-        data[i] = q_sin(data[i]);
-        i += 1;
-    }
-}
+use crate::math::*;
+use crate::config::{ModelConfig, LILITH_CONFIG};
+use crate::bus::{EventBus, LockFreeEventBus, QueueFull, BackpressurePolicy, QueueDepthMonitor, CrossbeamBus};
+use crate::context::SensoryEvent;
 use std::time::Duration;
-use std::sync::atomic::AtomicUsize;
-use std::cell::UnsafeCell;
-use crate::SensoryEvent;
-
-// MAGIC TRICK: Lock-Free Atomic Ring-Buffer
-// Replaces crossbeam::channel with a true 0-overhead memory-barrier array.
-#[derive(Debug)]
-pub struct QueueFull;
-
-// Generic EventBus Trait (Unifies crossbeam queue logic, epoch handling, per-stream back-pressure)
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BackpressurePolicy {
-    DropOldest,
-    DropNewest,
-    Block,
-}
-
-pub trait EventBus<T>: Send + Sync {
-    fn push(&self, event: T) -> Result<(), QueueFull>;
-    fn pop(&self) -> Option<T>;
-    fn len(&self) -> usize;
-    fn capacity(&self) -> usize;
-}
-
-pub struct LockFreeEventBus {
-    buffer: [UnsafeCell<Option<SensoryEvent>>; 256],
-    head: AtomicUsize,
-    tail: AtomicUsize,
-    policy: BackpressurePolicy,
-}
-
-unsafe impl Sync for LockFreeEventBus {}
-unsafe impl Send for LockFreeEventBus {}
-
-impl Default for LockFreeEventBus {
-    fn default() -> Self {
-        Self::new(BackpressurePolicy::Block)
-    }
-}
-
-impl LockFreeEventBus {
-    pub fn new(policy: BackpressurePolicy) -> Self {
-        const INIT: UnsafeCell<Option<SensoryEvent>> = UnsafeCell::new(None);
-        Self {
-            buffer: [INIT; 256],
-            head: AtomicUsize::new(0),
-            tail: AtomicUsize::new(0),
-            policy,
-        }
-    }
-}
-
-pub struct QueueDepthMonitor<'a, T> {
-    bus: &'a dyn EventBus<T>,
-    threshold_percent: usize,
-}
-
-impl<'a, T> QueueDepthMonitor<'a, T> {
-    pub fn new(bus: &'a dyn EventBus<T>, threshold_percent: usize) -> Self {
-        Self { bus, threshold_percent }
-    }
-    
-    pub fn is_overloaded(&self) -> bool {
-        let cap = self.bus.capacity();
-        if cap == 0 { return false; }
-        (self.bus.len() * 100) / cap > self.threshold_percent
-    }
-}
-
-impl EventBus<SensoryEvent> for LockFreeEventBus {
-    fn capacity(&self) -> usize { 256 }
-
-    fn len(&self) -> usize {
-        let head = self.head.load(Ordering::Relaxed);
-        let tail = self.tail.load(Ordering::Relaxed);
-        if head >= tail {
-            head - tail
-        } else {
-            256 - tail + head
-        }
-    }
-
-    fn push(&self, event: SensoryEvent) -> Result<(), QueueFull> {
-        let backoff = crossbeam::utils::Backoff::new();
-        loop {
-            if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
-            let tail = self.tail.load(Ordering::Acquire);
-            let next_tail = (tail + 1) % 256;
-            
-            if next_tail == self.head.load(Ordering::Acquire) {
-                match self.policy {
-                    BackpressurePolicy::DropOldest => {
-                        let _ = self.pop();
-                        continue;
-                    }
-                    BackpressurePolicy::DropNewest => {
-                        return Err(QueueFull);
-                    }
-                    BackpressurePolicy::Block => {
-                        if backoff.is_completed() {
-                            tracing::warn!("EventBus blocked too long, dropping event.");
-                            return Err(QueueFull);
-                        }
-                        backoff.spin();
-                        continue;
-                    }
-                }
-            }
-
-            unsafe {
-                *self.buffer[tail].get() = Some(event);
-            }
-            self.tail.store(next_tail, Ordering::Release);
-            return Ok(());
-        }
-    }
-
-    fn pop(&self) -> Option<SensoryEvent> {
-        let head = self.head.load(Ordering::Relaxed);
-        if head == self.tail.load(Ordering::Acquire) {
-            return None; // Empty
-        }
-
-        let event = unsafe {
-            (*self.buffer[head].get()).take()
-        };
-        self.head.store((head + 1) % 256, Ordering::Release);
-        event
-    }
-}
-
-pub struct CrossbeamBus<T> {
-    queue: crossbeam::queue::ArrayQueue<T>,
-}
-
-impl<T> CrossbeamBus<T> {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            queue: crossbeam::queue::ArrayQueue::new(capacity),
-        }
-    }
-}
-
-impl<T: Send + Sync> EventBus<T> for CrossbeamBus<T> {
-    fn capacity(&self) -> usize {
-        self.queue.capacity()
-    }
-
-    fn len(&self) -> usize {
-        self.queue.len()
-    }
-
-    fn push(&self, event: T) -> Result<(), QueueFull> {
-        self.queue.push(event).map_err(|_| QueueFull)
-    }
-
-    fn pop(&self) -> Option<T> {
-        self.queue.pop()
-    }
-}
-
-
-use lazy_static::lazy_static;
-use serde::Deserialize;
-#[derive(Deserialize, Clone)]
-pub struct ModelConfig {
-    pub hidden_size: usize,
-    pub seq_len: usize,
-    pub text_vocab_size: usize,
-    pub vision_vocab_size: usize,
-    pub audio_vocab_size: usize,
-    pub qkv_size: usize,
-    pub ffn_size: usize,
-    pub kv_offset: usize,
-    pub v_offset: usize,
-    pub head_dim: usize,
-    pub num_heads: usize,
-    pub num_kv_heads: usize,
-    pub num_layers: usize,
-    pub num_experts: usize,
-}
-
-lazy_static! {
-    pub static ref LILITH_CONFIG: ModelConfig = {
-        let mut file = File::open("config.json").unwrap();
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
-        serde_json::from_str(&contents).unwrap()
-    };
-}
 
 // wgpu structures
 // `Params` is 20 bytes (5 * 4 bytes). WebGPU Uniforms require strict 16-byte padding.
@@ -368,6 +96,7 @@ pub fn run_continuous_loop(
     struct WasmContractRuntime;
     impl WasmContractRuntime {
         fn execute_contract(&self, _state: &crate::GlobalContext) -> bool {
+            // TODO[P1]: Integrate Wasmer/Wasmtime JIT compiler to execute the bytecode natively instead of returning mocked true.
             true // Mock Wasm deterministic execution
         }
     }
@@ -1160,6 +889,7 @@ pub fn run_continuous_loop(
             queue.submit(Some(encoder.finish()));
             
             // 4. Update the context_anchor using the computed DX gradient
+            // TODO[P0]: Implement asynchronous WGPU buffer mapping (map_async) to read back the actual differential DX tensors from VRAM without stalling the engine pipeline.
             // In a real system, we'd read back the DX buffer from GPU. For this conceptual loop, we simulate 
             // the gradient step collapsing the noise.
             context_anchor.iter_mut().for_each(|c| *c -= *c * 0.05); // Gradient descent step (Energy minimization)
@@ -1430,15 +1160,17 @@ pub fn run_continuous_loop(
 
         // --- PHASE 6.5: INTUITION (QUANTUM TUNNELING) ---
         // Subconscious Heuristics: Check if we recognize this geometric state.
-        // A simple hash function over the context anchor to simulate the NYX residue cache check.
-        let mut cache_hash: u64 = 0;
-        for &val in context_anchor.iter().take(10) {
-            cache_hash = cache_hash.wrapping_add(val.to_bits() as u64);
-        }
+        // SHA-256 hardware-accelerated hashing over the context anchor to bypass execution cycles accurately using NYX cache.
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(bytemuck::cast_slice(&context_anchor));
+        let hash_output = hasher.finalize();
+        let cache_hash = u64::from_le_bytes(hash_output[0..8].try_into().unwrap());
         
         let p_tunnel = (cache_hash % 100) as f32 / 100.0;
         if p_tunnel > 0.95 {
             tracing::info!("✨ INTUITION TRIGGERED. Quantum Tunneling to target state. Bypassing GPU calculation.");
+            // TODO[P0]: Extract the mapped reality from the intuition_cache instead of just skipping the loop.
             // In a full implementation, we would extract the mapped reality from the intuition_cache.
             // For now, we simulate a zero-clock-cycle bypass by skipping the math loops.
             continue; 

@@ -6,7 +6,7 @@ use prismatic_core::SensoryEvent;
 use std::backtrace::Backtrace;
 use tokenizers::Tokenizer;
 use std::sync::Arc;
-use prismatic_core::temporal::EventBus;
+use prismatic_core::bus::EventBus;
 
 // Pre-allocated static buffer to avoid heap-allocation during Out-Of-Memory panics
 static mut PANIC_BUFFER: [u8; 8192] = [0; 8192];

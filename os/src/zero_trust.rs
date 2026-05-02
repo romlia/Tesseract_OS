@@ -7,7 +7,7 @@ use uinput::event::keyboard::Key;
 
 use prismatic_core::SensoryEvent;
 use tokenizers::Tokenizer;
-use prismatic_core::temporal::LockFreeEventBus;
+use prismatic_core::LockFreeEventBus;
 
 pub enum ExecutionIntent {
     Konsole,
@@ -351,7 +351,7 @@ impl ZeroTrustLedger {
     pub fn process_text_stream(
         &mut self,
         text: &str,
-        bus: &Arc<dyn prismatic_core::temporal::EventBus<prismatic_core::SensoryEvent>>,
+        bus: &Arc<dyn prismatic_core::bus::EventBus<prismatic_core::SensoryEvent>>,
         tokenizer: &Tokenizer,
     ) {
         // Biometric Keystroke Entropy Synthesis

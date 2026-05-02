@@ -16,12 +16,12 @@ impl EbpfMicroKernel {
 
 
     /// Simulates the eBPF Micro-Kernel executing a Dot Product on the NVMe Controller
-    /// Simulates the eBPF Micro-Kernel executing a Dot Product on the NVMe Controller
+    // TODO[P1]: Implement actual eBPF compiler backend to cross-compile WGSL to NVMe BPF bytecode and dispatch via nvme ioctl.
     /// In the Weight-Stationary paradigm, we pass the lightweight `context` across the PCIe bus,
     /// compute natively on the NAND flash, and return the result.
     pub fn execute_pim_offload(&self, expert_id: usize, context: &[f32], ebpf_bytecode_path: Option<&str>) -> std::io::Result<Vec<f32>> {
         if let Some(path) = ebpf_bytecode_path {
-            // Mock parsing of custom eBPF bytecode injected into SSD firmware
+            // TODO[P1]: Parse and load custom eBPF bytecode into SSD firmware memory
             let _ = std::fs::read(path); // check if mock bytecode exists
         }
         
@@ -44,6 +44,7 @@ impl EbpfMicroKernel {
         // Ensure dimensions match. For simplicity in this PIM demo, we will do a direct parallel zip
         let mut output = vec![0.0; context.len()];
         
+        // TODO[P2]: Replace parallel host-side loop with real NVMe Computational Storage Drive (CSD) command
         // Simulated Hardware Matrix Multiplication (NVMe ARM Controller)
         output.par_iter_mut().enumerate().for_each(|(i, out)| {
             if i < weights.len() {
