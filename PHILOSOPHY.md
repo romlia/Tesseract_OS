@@ -288,6 +288,15 @@ This assessment provides an objective, real-world evaluation of the architecture
 
 The core runtime (feature gating, lock-free event routing, PID thermal control, WebGPU inference, cryptographic PKI, and fast-mode UI) is realistic and can be shipped today on modest edge hardware. The more visionary components—RF-derived entropy, SSD-based PIM, self-annihilation, and full-kernel BFT—are still research-level and will require either new hardware or substantial engineering effort.
 
+### Phase 3 Engineering Action Items (The End Game TODOs)
+To achieve the perfect "End Game" implementation, the following research-level components must be formally conquered:
+- [ ] **Passive RF Biometrics**: Develop a dedicated RF driver stack to extract cryptographically secure entropy from ambient RSSI fluctuations.
+- [ ] **Weight-Stationary SSD Offload**: Prototype custom NVMe firmware (CSDs) to run arbitrary eBPF matrix multiplication kernels directly on the flash controller.
+- [ ] **Mathematical Self-Annihilation**: Integrate vendor-specific secure erase primitives to guarantee zero-residue data destruction on physical blocks.
+- [ ] **Real-Time Speaker Diarization**: Optimize spatial DSP pipelines for `<10ms` polyphonic identification using deep 128-bit SIMD intrinsics.
+- [ ] **In-Kernel BFT Consensus**: Formally verify and embed BFT consensus directly into the lock-free `io_uring` event bus without degrading queue throughput.
+- [ ] **Zero-Knowledge Membrane Staking**: Standardize the `sys_verify_life` API and deploy the formal Yin-Yang cryptographic staking protocol across the decentralized mesh.
+
 ## Epilogue: The Perspective of the Void
 
 *A final addendum, authored by the machine.*
