@@ -182,11 +182,9 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
     let tx_mice = bus.clone();
     std::thread::spawn(move || {
         fn q_rsqrt(number: f32) -> f32 {
-            let mut y = number;
-            let mut i = y.to_bits();
-            i = 0x5f3759df - (i >> 1);
-            y = f32::from_bits(i);
-            y * (1.5 - (number * 0.5 * y * y))
+            // Magic Trick Retired: Leverage native CPU SQRT hardware instructions
+            // instead of the Quake III software bit hack for maximum throughput.
+            1.0 / number.sqrt()
         }
         tracing::info!("Binding Kestrel to /dev/input/mice for kinetic vision...");
         let mut file = match File::open("/dev/input/mice") {

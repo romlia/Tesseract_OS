@@ -23,14 +23,9 @@ struct Params {
 // 0. CARMACK'S FAST INVERSE SQUARE ROOT (q_rsqrt)
 // ---------------------------------------------------------
 fn q_rsqrt(number: f32) -> f32 {
-    let threehalfs: f32 = 1.5;
-    let x2: f32 = number * 0.5;
-    var y: f32 = number;
-    var i: u32 = bitcast<u32>(y);
-    i = 0x5f3759dfu - (i >> 1u);
-    y = bitcast<f32>(i);
-    y = y * (threehalfs - (x2 * y * y));
-    return y;
+    // Magic Trick Retired: WebGPU native hardware inverseSqrt is 
+    // significantly faster and more precise than the Quake III bit hack.
+    return inverseSqrt(number);
 }
 
 // ---------------------------------------------------------
