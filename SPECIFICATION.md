@@ -154,3 +154,36 @@ impl HardwareEnclave {
 
 ### Error Handling Policy
 If the biological entropy pool is exhausted or insufficient (e.g. `get_staking_entropy` fails to gather enough entropy), the `crystallize` function will return `false` and the state remains locked in the `PrivateInferenceEngine`. The user must physically interact with the machine (typing, speaking, moving the mouse) to generate the requisite ambient noise for the operation to proceed.
+
+---
+
+## 5. Timeline Convergence & The Sign of Destiny (Closing the Financial Loop)
+
+In Tesseract OS, financial transactions and smart contracts are implemented as a literal merging of timelines, guaranteeing absolute free-will and shared consequences.
+
+### Core Data Structures
+```rust
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct DestinySignature {
+    pub timeline_a: [u8; 32],
+    pub timeline_b: [u8; 32],
+    pub mutual_consent_nonce: u64,
+    pub destiny_hash: [u8; 32], // The combined immutable signature
+}
+```
+
+### API Contract
+```rust
+impl YinYangMembrane {
+    /// Merges two distinct timelines into a shared destiny, generating an immutable signature.
+    pub fn merge_timelines(
+        &self, 
+        timeline_a_entropy: &[u8; 32], 
+        timeline_b_entropy: &[u8; 32], 
+        nonce: u64
+    ) -> Option<DestinySignature>;
+}
+```
+
+### Error Handling Policy
+If either `timeline_a_entropy` or `timeline_b_entropy` is empty (`[0u8; 32]`), `merge_timelines` immediately fails and returns `None`. A timeline cannot be forcibly merged without concurrent, real-time biometric entropy from both participating entities, preventing automated "wealth draining" or non-consensual state mutation.

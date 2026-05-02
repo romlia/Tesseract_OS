@@ -77,6 +77,14 @@ pub struct StakingContract {
     pub signature: Vec<u8>, // Vec avoids serde array size limits for 64-byte signature
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct DestinySignature {
+    pub timeline_a: [u8; 32],
+    pub timeline_b: [u8; 32],
+    pub mutual_consent_nonce: u64,
+    pub destiny_hash: [u8; 32], // The combined immutable signature
+}
+
 pub struct YinYangMembrane;
 
 impl YinYangMembrane {
@@ -85,6 +93,37 @@ impl YinYangMembrane {
         // HORIZON[P3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
         crate::crypto::tesseract_hash(entropy_pool)
     }
+
+    pub fn merge_timelines(
+        &self, 
+        timeline_a_entropy: &[u8; 32], 
+        timeline_b_entropy: &[u8; 32], 
+        nonce: u64
+    ) -> Option<DestinySignature> {
+        // Timeline Convergence & The Sign of Destiny
+        // Both timelines must provide absolute biometric consent (entropy).
+        if timeline_a_entropy == &[0u8; 32] || timeline_b_entropy == &[0u8; 32] {
+            tracing::warn!("Timeline Merge Failed: Absolute mutual consent (entropy) required.");
+            return None;
+        }
+        
+        let mut combined_entropy = Vec::with_capacity(72);
+        combined_entropy.extend_from_slice(timeline_a_entropy);
+        combined_entropy.extend_from_slice(timeline_b_entropy);
+        combined_entropy.extend_from_slice(&nonce.to_le_bytes());
+        
+        let destiny_hash = crate::crypto::tesseract_hash(&combined_entropy);
+        
+        tracing::info!("TIMELINES MERGED: Destiny Signature Crystallized.");
+        
+        Some(DestinySignature {
+            timeline_a: *timeline_a_entropy,
+            timeline_b: *timeline_b_entropy,
+            mutual_consent_nonce: nonce,
+            destiny_hash,
+        })
+    }
+
     pub fn crystallize(ledger: &mut ZeroTrustLedger, private_freewheel: &[f32], public_truth: &mut [f32]) -> bool {
         // Attempt to convert subjective private chaos into objective public truth
         if ledger.biological_credit < 1.0 {
