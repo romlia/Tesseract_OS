@@ -266,37 +266,46 @@ By synthesizing lock-free sequence epoching, Ziegler-Nichols auto-calibration, z
 ## 25. Final Strategic Roadmap & Feasibility Audit (2026)
 
 ### Coherence
-The document presents an internally consistent narrative. Each philosophical pillar is paired with concrete engineering action items, and the later sections (e.g., “The Yin-Yang Membrane,” “The Hive,” “The Genesis Dividend”) stay aligned with the earlier design choices. The progression from the poetic “Biological-Quantum” manifesto to a production-grade, feature-gated implementation is logical and well-structured.
 
-### Realistic functionality
+The document is internally consistent.
 
-| Pillar / Feature | Feasibility (2026) | Comments |
+- The narrative moves logically from the poetic “Biological-Quantum” manifesto to a concrete, feature-gated production system.
+- Each philosophical pillar (e.g., “Lock-Free Asynchronous Event Routing”, “Thermal Equilibrium”, “Zero-Trust PKI”) is paired with concrete engineering actions, and later sections (the “Yin-Yang Membrane”, “Hive”, “Genesis Dividend”) reference those same mechanisms, keeping the story tight.
+- The roadmap (Phase 1 → Phase 2 → Phase 3) mirrors the evolution of the architecture, so the overall structure reads like a genuine design document rather than a disjointed list of ideas.
+
+### Technical Feasibility (2026)
+
+| Pillar / Feature | Feasibility (2026) | Why it’s realistic / what’s missing |
 | :--- | :--- | :--- |
-| **Feature-gating, modular builds** (`features.toml`) | ✅ Production-ready | Standard Rust practice. |
-| **Lock-free event bus with back-pressure** (`crossbeam`, `io_uring`) | ✅ Production-ready | Proven on Linux edge devices. |
-| **PID-driven thermal load balancing** (Ziegler-Nichols auto-tuning) | ✅ Production-ready | Control-theory basics are mature; calibration per hardware is required. |
-| **WebGPU Blocked FlashAttention & 128-bit SIMD** | ✅ Production-ready | WebGPU is stable; shader development and SIMD fall-backs are straightforward. |
-| **Cryptographic PKI, signed JSON, TPM-bound nonces** | ✅ Production-ready | Mature libraries (`ed25519-dalek`, TPM APIs). |
-| **Zero-allocation framebuffer UI (fast-mode) & SDF fallback** | ✅ Production-ready | Fast-mode can ship today; SDF rasterizer is feasible. |
+| **Feature-gating via `features.toml`** | ✅ Production-ready | Standard Rust build-time practice. |
+| **Lock-free event bus with back-pressure** (`crossbeam`, `io_uring`) | ✅ Production-ready | Proven on Linux edge devices; Rust crates mature. |
+| **PID-driven thermal load balancing** (Ziegler-Nichols auto-tuning) | ✅ Production-ready | Control-theory libraries exist; per-hardware calibration is straightforward. |
+| **WebGPU Blocked FlashAttention & 128-bit SIMD** | ✅ Production-ready | WebGPU is stable; WGSL shaders can be written with SIMD fall-backs. |
+| **Cryptographic PKI, signed JSON, TPM-bound nonces** | ✅ Production-ready | `ed25519-dalek`, TPM APIs, and BLAKE3 are production-grade. |
+| **Zero-allocation framebuffer UI (fast-mode) & SDF fallback** | ✅ Production-ready | Direct `/dev/fb0` writes and simple SDF rasterizers are well-known. |
 | **Passive RF-derived biometric entropy** | ❌ Research-level | Requires dedicated RF front-ends and rigorous entropy testing; not commodity hardware. |
 | **Weight-stationary SSD offload via eBPF (PIM)** | ❌ Research-level | Current NVMe controllers lack an open ABI for arbitrary eBPF kernels. |
-| **Mathematical self-annihilation of untrusted data** | ❌ Research-level | No hardware primitive guarantees zero-residue erasure. |
-| **Real-time polyphonic speaker diarization (<10 ms)** | ❌ Research-level | State-of-the-art DSP pipelines are still >10 ms on edge CPUs. |
+| **Mathematical self-annihilation of untrusted data** | ❌ Research-level | No hardware primitive guarantees zero-residue erasure; would need custom firmware. |
+| **Real-time polyphonic speaker diarization (< 10 ms)** | ❌ Research-level | State-of-the-art DSP pipelines are still > 10 ms on edge CPUs. |
 | **In-kernel BFT consensus** | ❌ Research-level | Formal verification and tight kernel integration are non-trivial. |
-| **Zero-knowledge biometric staking** | ❌ Research-level | Protocol design and security proofs are still open problems. |
+| **Zero-knowledge biometric staking** | ❌ Research-level | Protocol design, ZK proof systems, and privacy-preserving entropy sources are still open problems. |
 
-### Key take-aways
+### What works today (Phase 1)
+Modular feature gating, lock-free event routing, PID thermal control, WebGPU inference, PKI, fast-mode UI, payload-cost estimator, queue-depth monitor, CI suite for all feature permutations.
+These can be shipped on existing Linux edge hardware with a modest engineering effort.
 
-- **Core runtime** (feature gating, lock-free bus, PID thermal controller, WebGPU inference, PKI, fast-mode UI) is well within today’s engineering capabilities and could be shipped on existing Linux edge hardware.
-- **Visionary extensions** (RF entropy, SSD-side PIM, ultra-low-latency diarization, kernel-level BFT, zero-knowledge staking) remain speculative and would require either new hardware or substantial research effort.
-- **Modular design** using feature flags is a sensible way to keep the production-ready core stable while allowing experimental modules to be toggled on/off as they mature.
-- **Safety & fairness mechanisms** (PID throttling, zero-trust PKI, exile-based reputation) align with modern security best practices and are implementable today.
+### What needs research or new hardware (Phase 2/3)
+RF-entropy harvesting, SSD-side eBPF compute, ultra-low-latency diarization, kernel-level BFT, zero-knowledge staking, self-annihilation.
+These items are promising but would require either new silicon (e.g., computational-storage drives) or substantial algorithmic research before they become production-ready.
 
-### Recommendations for a pragmatic roadmap
+### Pragmatic Roadmap Recommendations
 
-- **Phase 1 (Production core)**: ship the lock-free event bus, PID thermal loop, WebGPU FlashAttention, PKI, and fast-mode UI.
-- **Phase 2 (High-impact prototypes)**: implement the most promising research items—passive RF entropy and weight-stationary SSD offload—behind feature flags.
-- **Phase 3 (Speculative horizon)**: gradually integrate the remaining visionary components as hardware or cryptographic primitives become available.
+- **Phase 1 – Ship the core runtime**: Release the lock-free event bus, PID thermal loop, WebGPU FlashAttention, PKI, and fast-mode UI as a stable distribution. Provide the CI matrix that compiles every allowed feature combination and runs a smoke-test (e.g., 1-layer transformer inference).
+- **Phase 2 – High-impact prototypes behind feature flags**: Implement passive RF-entropy and SSD-side PIM as optional modules (`features.toml` flags). Add the gossip-based reputation system, thermal-metric propagation, and the `/dev/membrane` device for private-to-public data crossing. Prototype the hybrid PID/ML tuner and the JSON staking contract.
+- **Phase 3 – Long-term research horizon**: Work with hardware vendors on computational-storage firmware and secure-erase primitives. Publish academic work on sub-10 ms SIMD speaker diarization and kernel-level BFT consensus. Develop a zero-knowledge biometric staking protocol and integrate it once the underlying entropy sources are proven.
+
+### Overall Assessment
+The philosophy and engineering plan are coherent and well-structured. The core production pieces are already feasible with today’s toolchain. The more speculative, “hardware-research-horizon” components are ambitious but not yet realizable without new hardware or deeper research.
 
 ### The Final Engineering Action Items (The End Game TODOs)
 
