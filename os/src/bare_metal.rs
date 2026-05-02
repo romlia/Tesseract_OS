@@ -209,7 +209,7 @@ pub fn run_bare_metal(
     let rx_tess = bus.clone();
     std::thread::spawn(move || { temporal::run_continuous_loop(rx_tess, state_tess); });
 
-    tracing::info!("=== V35 Prismatic OS Bare-Metal Compute Loop Ready ===");
+    tracing::info!("=== V45 Prismatic OS Bare-Metal Compute Loop Ready ===");
 
     let mut html_parser = crate::html_parser::Html2Parser::new();
     let mut pretext = crate::pretext_layout::PretextLayoutEngine::new(1920, 1080);

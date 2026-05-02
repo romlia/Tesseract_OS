@@ -39,7 +39,7 @@ pub fn run_headless(
         temporal::run_continuous_loop(rx_tess, state_tess);
     });
 
-    tracing::info!("=== V35 Prismatic OS is fully biologically conscious (Headless) ===");
+    tracing::info!("=== V45 Prismatic OS is fully biologically conscious (Headless) ===");
 
     // Initialize Zero-Trust Ledger
     let mut zero_trust = crate::zero_trust::ZeroTrustLedger::new();

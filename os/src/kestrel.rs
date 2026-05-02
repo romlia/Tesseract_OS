@@ -20,7 +20,7 @@ pub fn initialize_kestrel_hook() {
             let mut cursor = std::io::Cursor::new(&mut PANIC_BUFFER[..]);
             let _ = write!(
                 cursor,
-                "PRISMATIC SINGULARITY FAULT\nPanicked at: {:?}\nBacktrace:\n{}",
+                "V45 PRISMATIC SINGULARITY FAULT\nPanicked at: {:?}\nBacktrace:\n{}",
                 panic_info.location(),
                 backtrace
             );
@@ -30,7 +30,7 @@ pub fn initialize_kestrel_hook() {
             if let Ok(mut file) = OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open("CRASH_DUMP_V35.log")
+                .open("CRASH_DUMP_V45.log")
             {
                 let _ = file.write_all(&PANIC_BUFFER[..length]);
                 let _ = file.sync_all(); // Synchronous block before power loss

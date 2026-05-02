@@ -38,7 +38,7 @@ pub fn spawn_watchdog(watchdog_context: Arc<GlobalContext>, watchdog_bus: Arc<dy
                 
                 // Graceful Bare-Metal Shutdown: Manually write dump, then issue ACPI poweroff
                 let dump_msg = format!("WATCHDOG THERMAL MELTDOWN ({}C)\nPipelines drained gracefully.", temp);
-                let _ = std::fs::write("CRASH_DUMP_V35.log", dump_msg);
+                let _ = std::fs::write("CRASH_DUMP_V45.log", dump_msg);
                 let _ = std::process::Command::new("poweroff").spawn();
                 std::process::exit(1);
             }
