@@ -1,6 +1,6 @@
+use crate::bus::EventBus;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize};
 use std::sync::{Arc, Mutex};
-use crate::bus::EventBus;
 
 #[derive(Debug, Clone)]
 pub enum SensoryEvent {
@@ -22,7 +22,7 @@ pub struct GlobalContext {
     pub active_tokens: AtomicU32,
     pub hallucination_threshold: AtomicU32,
     pub thermal_limit_celsius: AtomicU32,
-    
+
     pub batch_scale: AtomicUsize,
     pub event_epoch_seq: AtomicU64,
     pub vocal_chord: Arc<dyn EventBus<u32>>,
@@ -53,7 +53,7 @@ impl GlobalContext {
             sandboxed_payloads: Arc::new(crate::bus::CrossbeamBus::new(128)),
         }
     }
-    
+
     pub fn spawn_diagnostic_socket(state: Arc<GlobalContext>) {
         std::thread::spawn(move || {
             let socket_path = "/tmp/tesseract_shader.sock";
@@ -66,13 +66,27 @@ impl GlobalContext {
                         let state_ref = state.clone();
                         std::thread::spawn(move || {
                             loop {
-                                if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
-                                
-                                let gpu_temp = f32::from_bits(state_ref.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
-                                let latency = f32::from_bits(state_ref.inference_latency_ms.load(std::sync::atomic::Ordering::Relaxed));
-                                let tokens = state_ref.active_tokens.load(std::sync::atomic::Ordering::Relaxed);
-                                let epoch = state_ref.event_epoch_seq.load(std::sync::atomic::Ordering::Relaxed);
-                                
+                                if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
+                                    break;
+                                }
+
+                                let gpu_temp = f32::from_bits(
+                                    state_ref
+                                        .gpu_thermal_celsius
+                                        .load(std::sync::atomic::Ordering::Relaxed),
+                                );
+                                let latency = f32::from_bits(
+                                    state_ref
+                                        .inference_latency_ms
+                                        .load(std::sync::atomic::Ordering::Relaxed),
+                                );
+                                let tokens = state_ref
+                                    .active_tokens
+                                    .load(std::sync::atomic::Ordering::Relaxed);
+                                let epoch = state_ref
+                                    .event_epoch_seq
+                                    .load(std::sync::atomic::Ordering::Relaxed);
+
                                 let payload = serde_json::json!({
                                     "gpu_thermal_celsius": gpu_temp,
                                     "inference_latency_ms": latency,
@@ -80,14 +94,15 @@ impl GlobalContext {
                                     "event_epoch_seq": epoch,
                                     "status": "WGSL SIMD128 Active"
                                 });
-                                
-                                let mut json_bytes = serde_json::to_vec(&payload).unwrap_or_default();
+
+                                let mut json_bytes =
+                                    serde_json::to_vec(&payload).unwrap_or_default();
                                 json_bytes.push(b'\n');
-                                
+
                                 if stream.write_all(&json_bytes).is_err() {
                                     break; // Client disconnected
                                 }
-                                
+
                                 std::thread::sleep(std::time::Duration::from_millis(100)); // 10Hz streaming
                             }
                         });

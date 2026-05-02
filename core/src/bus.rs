@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug)]
 pub struct QueueFull;
@@ -56,18 +56,25 @@ pub struct QueueDepthMonitor<'a, T> {
 
 impl<'a, T> QueueDepthMonitor<'a, T> {
     pub fn new(bus: &'a dyn EventBus<T>, threshold_percent: usize) -> Self {
-        Self { bus, threshold_percent }
+        Self {
+            bus,
+            threshold_percent,
+        }
     }
-    
+
     pub fn is_overloaded(&self) -> bool {
         let cap = self.bus.capacity();
-        if cap == 0 { return false; }
+        if cap == 0 {
+            return false;
+        }
         (self.bus.len() * 100) / cap > self.threshold_percent
     }
 }
 
 impl EventBus<crate::context::SensoryEvent> for LockFreeEventBus {
-    fn capacity(&self) -> usize { 256 }
+    fn capacity(&self) -> usize {
+        256
+    }
 
     fn len(&self) -> usize {
         let head = self.head.load(Ordering::Relaxed);
@@ -82,10 +89,12 @@ impl EventBus<crate::context::SensoryEvent> for LockFreeEventBus {
     fn push(&self, event: crate::context::SensoryEvent) -> Result<(), QueueFull> {
         let backoff = crossbeam::utils::Backoff::new();
         loop {
-            if crate::SHUTDOWN.load(Ordering::Relaxed) { return Ok(()); }
+            if crate::SHUTDOWN.load(Ordering::Relaxed) {
+                return Ok(());
+            }
             let tail = self.tail.load(Ordering::Acquire);
             let next_tail = (tail + 1) % 256;
-            
+
             if next_tail == self.head.load(Ordering::Acquire) {
                 match self.policy {
                     BackpressurePolicy::DropOldest => {
@@ -120,9 +129,7 @@ impl EventBus<crate::context::SensoryEvent> for LockFreeEventBus {
             return None; // Empty
         }
 
-        let event = unsafe {
-            (*self.buffer[head].get()).take()
-        };
+        let event = unsafe { (*self.buffer[head].get()).take() };
         self.head.store((head + 1) % 256, Ordering::Release);
         event
     }

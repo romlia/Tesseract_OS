@@ -1,4 +1,10 @@
-#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+#![allow(
+    dead_code,
+    unused_variables,
+    unused_imports,
+    unused_assignments,
+    unused_must_use
+)]
 //! The Holographic Engine & Stirling Thermodynamics
 //!
 //! Replaces legacy UI frameworks by rendering native WebGPU
@@ -23,7 +29,7 @@ pub struct HologramSurface {
     // MVP Fast-Mode: Render directly to /dev/fb0
     // Full-Mode: Render to WebGPU ComputePass
     pub fb_file: Option<std::fs::File>,
-    
+
     #[cfg(feature = "warm_gpu_context")]
     pub wgpu_device: Option<Arc<wgpu::Device>>,
     #[cfg(feature = "warm_gpu_context")]
@@ -36,33 +42,40 @@ impl HologramSurface {
         // Integrate kmscon or minimal DRM/KMS library to lock display modes before launching UI
         #[cfg(target_os = "linux")]
         {
-            tracing::info!("DRM/KMS Hardware Mode-Setting Initialized. Synchronizing EGL/GBM context.");
+            tracing::info!(
+                "DRM/KMS Hardware Mode-Setting Initialized. Synchronizing EGL/GBM context."
+            );
         }
 
         Self {
             surface_id: 0,
             width,
             height,
-            fb_file: std::fs::OpenOptions::new().write(true).open("/dev/fb0").ok(),
-            
+            fb_file: std::fs::OpenOptions::new()
+                .write(true)
+                .open("/dev/fb0")
+                .ok(),
+
             #[cfg(feature = "warm_gpu_context")]
             wgpu_device: None, // Will be initialized asynchronously
             #[cfg(feature = "warm_gpu_context")]
             wgpu_queue: None,
         }
     }
-    
+
     pub fn render_to_fb0(&mut self, glyph_buffer: &[u32], raw_text: &str) {
         // Unicode-Detect Shim
         let needs_sdf = raw_text.bytes().any(|b| b > 0x7F);
         if needs_sdf {
-            tracing::debug!("Unicode > 0x7F detected! Instantly waking WebGPU SDF pipeline for Full-Mode.");
+            tracing::debug!(
+                "Unicode > 0x7F detected! Instantly waking WebGPU SDF pipeline for Full-Mode."
+            );
             // In a real implementation, we'd swap the UiMode here and jump to the wgpu queue
         }
-        
+
         // Latency Benchmarking
         // Wrap this framebuffer write in a high-resolution timer (e.g., `minstant` or `std::time::Instant`).
-        // Log the p99 latency of casting and flushing to `/dev/fb0`. This metric is required 
+        // Log the p99 latency of casting and flushing to `/dev/fb0`. This metric is required
         // to validate the "instantaneous zero-latency UI" claim on target Edge hardware.
         use std::io::Write;
         if let Some(fb) = &mut self.fb_file {
@@ -115,7 +128,7 @@ impl DynamicLoadBalancer {
         if let Ok(temp_str) = std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
             if let Ok(temp_milli_celsius) = temp_str.trim().parse::<f32>() {
                 let temp_c = temp_milli_celsius / 1000.0;
-                
+
                 // Hysteresis band: 78C to 82C
                 if temp_c > 82.0 {
                     let overheat = temp_c - 82.0;
@@ -129,11 +142,11 @@ impl DynamicLoadBalancer {
                 }
             }
         }
-        
+
         // Low-pass filter (EMA) to prevent stutter
         let alpha = 0.05f64;
         self.dt_ms = self.dt_ms * (1.0 - alpha) + (final_target_dt as f64) * alpha;
-        
+
         // Safety Envelopes: Clamp between 2.0ms (500 FPS max) and 1000.0ms (1 FPS min)
         // This prevents PID/thermal runaways from deadlocking the UI thread with impossible target intervals.
         self.dt_ms = self.dt_ms.clamp(2.0, 1000.0);

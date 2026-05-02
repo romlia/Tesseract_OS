@@ -11,13 +11,13 @@ use ratatui::{
     Terminal,
 };
 use serde::Deserialize;
+use std::io::{BufRead, BufReader};
+use std::os::unix::net::UnixStream;
 use std::{
     io,
     sync::{Arc, Mutex},
     time::Duration,
 };
-use std::io::{BufRead, BufReader};
-use std::os::unix::net::UnixStream;
 
 #[derive(Deserialize, Default, Clone)]
 struct TelemetryPayload {
@@ -133,15 +133,26 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
 
     // Header
     let header_text = if connected {
-        format!(" Tesseract OS Holographic Diagnostic Matrix // {} ", telemetry.status)
+        format!(
+            " Tesseract OS Holographic Diagnostic Matrix // {} ",
+            telemetry.status
+        )
     } else {
         " Tesseract OS Holographic Diagnostic Matrix // [DISCONNECTED] ".to_string()
     };
-    
-    let header_color = if connected { Color::Cyan } else { Color::DarkGray };
+
+    let header_color = if connected {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let header = Paragraph::new(header_text)
-        .style(Style::default().fg(header_color).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(header_color)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(Block::default().borders(Borders::ALL).title("Core"));
     f.render_widget(header, chunks[0]);
 
@@ -158,8 +169,17 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     };
 
     let gauge = Gauge::default()
-        .block(Block::default().title("GPU Thermal Load (Carnot)").borders(Borders::ALL))
-        .gauge_style(Style::default().fg(temp_color).bg(Color::Black).add_modifier(Modifier::ITALIC))
+        .block(
+            Block::default()
+                .title("GPU Thermal Load (Carnot)")
+                .borders(Borders::ALL),
+        )
+        .gauge_style(
+            Style::default()
+                .fg(temp_color)
+                .bg(Color::Black)
+                .add_modifier(Modifier::ITALIC),
+        )
         .ratio(ratio)
         .label(format!("{:.1}°C", temp));
     f.render_widget(gauge, chunks[1]);
@@ -172,6 +192,10 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
 
     let metrics_box = Paragraph::new(metrics_text)
         .style(Style::default().fg(Color::Magenta))
-        .block(Block::default().borders(Borders::ALL).title("Cognitive Immune System"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Cognitive Immune System"),
+        );
     f.render_widget(metrics_box, chunks[2]);
 }

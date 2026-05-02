@@ -1,4 +1,10 @@
-#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+#![allow(
+    dead_code,
+    unused_variables,
+    unused_imports,
+    unused_assignments,
+    unused_must_use
+)]
 // HORIZON[P2]: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
 // HORIZON[P2]: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
 // P1: Exposed a secure syscall (`sys_verify_life`) that smart contracts can invoke to enforce real-time, entropy-based presence checks.
@@ -8,9 +14,9 @@ use uinput::Device;
 use uinput::event::Event;
 use uinput::event::keyboard::Key;
 
+use prismatic_core::LockFreeEventBus;
 use prismatic_core::SensoryEvent;
 use tokenizers::Tokenizer;
-use prismatic_core::LockFreeEventBus;
 
 pub enum ExecutionIntent {
     Konsole,
@@ -27,7 +33,7 @@ impl BloomFilter {
     pub fn new() -> Self {
         Self { bitfield: [0; 4] }
     }
-    
+
     // Hash 32-byte keys into bit indexes using simplified DJB2-esque extraction
     pub fn insert(&mut self, key: &[u8; 32]) {
         let h1 = (key[0] as usize) | ((key[1] as usize) << 8) | ((key[2] as usize) << 16);
@@ -35,14 +41,14 @@ impl BloomFilter {
         self.bitfield[(h1 / 64) % 4] |= 1 << (h1 % 64);
         self.bitfield[(h2 / 64) % 4] |= 1 << (h2 % 64);
     }
-    
+
     pub fn contains(&self, key: &[u8; 32]) -> bool {
         let h1 = (key[0] as usize) | ((key[1] as usize) << 8) | ((key[2] as usize) << 16);
         let h2 = (key[16] as usize) | ((key[17] as usize) << 8) | ((key[18] as usize) << 16);
-        
+
         let b1 = self.bitfield[(h1 / 64) % 4] & (1 << (h1 % 64)) != 0;
         let b2 = self.bitfield[(h2 / 64) % 4] & (1 << (h2 % 64)) != 0;
-        
+
         b1 && b2
     }
 }
@@ -68,7 +74,7 @@ impl Default for ZeroTrustLedger {
 }
 
 // Phase 13: The Yin-Yang Membrane
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct StakingContract {
@@ -95,10 +101,10 @@ impl YinYangMembrane {
     }
 
     pub fn merge_timelines(
-        &self, 
-        timeline_a_entropy: &[u8; 32], 
-        timeline_b_entropy: &[u8; 32], 
-        nonce: u64
+        &self,
+        timeline_a_entropy: &[u8; 32],
+        timeline_b_entropy: &[u8; 32],
+        nonce: u64,
     ) -> Option<DestinySignature> {
         // Timeline Convergence & The Sign of Destiny
         // Both timelines must provide absolute biometric consent (entropy).
@@ -106,16 +112,16 @@ impl YinYangMembrane {
             tracing::warn!("Timeline Merge Failed: Absolute mutual consent (entropy) required.");
             return None;
         }
-        
+
         let mut combined_entropy = Vec::with_capacity(72);
         combined_entropy.extend_from_slice(timeline_a_entropy);
         combined_entropy.extend_from_slice(timeline_b_entropy);
         combined_entropy.extend_from_slice(&nonce.to_le_bytes());
-        
+
         let destiny_hash = crate::crypto::tesseract_hash(&combined_entropy);
-        
+
         tracing::info!("TIMELINES MERGED: Destiny Signature Crystallized.");
-        
+
         Some(DestinySignature {
             timeline_a: *timeline_a_entropy,
             timeline_b: *timeline_b_entropy,
@@ -124,21 +130,25 @@ impl YinYangMembrane {
         })
     }
 
-    pub fn crystallize(ledger: &mut ZeroTrustLedger, private_freewheel: &[f32], public_truth: &mut [f32]) -> bool {
+    pub fn crystallize(
+        ledger: &mut ZeroTrustLedger,
+        private_freewheel: &[f32],
+        public_truth: &mut [f32],
+    ) -> bool {
         // Attempt to convert subjective private chaos into objective public truth
         if ledger.biological_credit < 1.0 {
             tracing::warn!("Insufficient Biological Credit to crystallize thought.");
             return false;
         }
-        
+
         // The Social Contract Operator ($\hat{S}$) Evaluation
         // P1: Enforced 'The Architect's Binding'—ensure the Social Contract Operator evaluates Genesis Node payloads with identical strictness to edge nodes.
         let is_architect = false; // Mock
         let strictness_scalar = if is_architect { 1.0 } else { 1.0 }; // Identical strictness
-        
+
         // We simulate the topological verification of the private_freewheel tensor
-        let is_mathematically_sound = strictness_scalar == 1.0; 
-        
+        let is_mathematically_sound = strictness_scalar == 1.0;
+
         if is_mathematically_sound {
             public_truth.copy_from_slice(private_freewheel);
             ledger.biological_credit -= 1.0; // Stake burned successfully
@@ -197,20 +207,21 @@ impl ZeroTrustLedger {
             biological_credit: 100.0, // Phase 13: Initialize Yin-Yang Currency
         }
     }
-    
+
     // Genesis Smart Contract (Apply logistic function to GenesisDividend credit accrual for Central Limit ceiling)
     pub fn process_genesis_dividend(&mut self, base_accrual: f64) {
         let ceiling = 10_000_000.0; // The Central Limit
         let k = 0.0001; // Logistic growth rate
         let x0 = 5_000_000.0; // Midpoint
-        
+
         // f(x) = L / (1 + e^(-k(x-x0)))
-        let logistic_multiplier = ceiling / (1.0 + std::f64::consts::E.powf(-k * (self.compute_credits - x0)));
+        let logistic_multiplier =
+            ceiling / (1.0 + std::f64::consts::E.powf(-k * (self.compute_credits - x0)));
         // As credits approach ceiling, the multiplier slows down the accrual.
         let actual_accrual = base_accrual * (1.0 - (logistic_multiplier / ceiling));
         self.compute_credits += actual_accrual.max(0.0);
     }
-    
+
     // Proof-of-Life Handshake API
     pub fn sys_verify_life(&self) -> bool {
         // Assert recent biological entropy updates before executing smart contracts.
@@ -230,17 +241,17 @@ impl ZeroTrustLedger {
         // HORIZON[P3]: Extract cryptographically secure entropy from ambient RF (Wi-Fi/Bluetooth) RSSI variance.
         // Bandwidth Swing: Non-intrusively read /proc/net/wireless
         // MAGIC TRICK: Zero-Allocation Procfs Heartbeat
-        // Safety Net: If `/proc/net/wireless` does not exist, use a pseudo-random fallback 
+        // Safety Net: If `/proc/net/wireless` does not exist, use a pseudo-random fallback
         // so the OS doesn't completely die and Swarm trust isn't instantly revoked.
         use std::io::Read;
         let mut buf = [0u8; 1024];
         if let Ok(mut file) = std::fs::File::open("/proc/net/wireless") {
             if let Ok(bytes_read) = file.read(&mut buf) {
                 let slice = &buf[..bytes_read];
-                
+
                 let mut noise = 0.0;
                 let mut count = 0;
-                
+
                 // Zero-allocation byte scanner (skip 2 lines)
                 let mut line_breaks = 0;
                 let mut current_idx = 0;
@@ -250,34 +261,46 @@ impl ZeroTrustLedger {
                     }
                     current_idx += 1;
                 }
-                
+
                 // Parse rest of lines
                 while current_idx < bytes_read {
                     let mut line_end = current_idx;
                     while line_end < bytes_read && slice[line_end] != b'\n' {
                         line_end += 1;
                     }
-                    
+
                     // Super fast ASCII extraction of the 4th column
                     let mut col = 0;
                     let mut i = current_idx;
                     while i < line_end {
-                        while i < line_end && slice[i] == b' ' { i += 1; }
-                        if i < line_end { col += 1; }
+                        while i < line_end && slice[i] == b' ' {
+                            i += 1;
+                        }
+                        if i < line_end {
+                            col += 1;
+                        }
                         let start = i;
-                        while i < line_end && slice[i] != b' ' { i += 1; }
-                        
-                        if col == 4 { // 4th column is Noise
+                        while i < line_end && slice[i] != b' ' {
+                            i += 1;
+                        }
+
+                        if col == 4 {
+                            // 4th column is Noise
                             let mut val = 0.0;
                             let mut negative = false;
                             let mut p = start;
-                            if slice[p] == b'-' { negative = true; p += 1; }
+                            if slice[p] == b'-' {
+                                negative = true;
+                                p += 1;
+                            }
                             while p < i && slice[p] >= b'0' && slice[p] <= b'9' {
                                 val = val * 10.0 + (slice[p] - b'0') as f32;
                                 p += 1;
                             }
                             // Ignore fractional dots for speed, noise is usually integer
-                            if negative { val = -val; }
+                            if negative {
+                                val = -val;
+                            }
                             noise += val;
                             count += 1;
                             break;
@@ -285,14 +308,15 @@ impl ZeroTrustLedger {
                     }
                     current_idx = line_end + 1;
                 }
-                
+
                 if count > 0 {
                     let avg_noise = noise / (count as f32);
-                    self.entropy_pool.extend_from_slice(&avg_noise.to_bits().to_le_bytes());
-                    
+                    self.entropy_pool
+                        .extend_from_slice(&avg_noise.to_bits().to_le_bytes());
+
                     let diff = (avg_noise - self.biological_rhythm).abs();
                     self.biological_rhythm = self.biological_rhythm * 0.9 + avg_noise * 0.1;
-                    
+
                     if diff > 15.0 {
                         let current = self.get_trust();
                         self.set_trust(f32::max(0.0, current - 2.0));
@@ -302,11 +326,14 @@ impl ZeroTrustLedger {
         } else {
             // FALLBACK SAFETY NET
             // If no wifi exists, inject organic pseudo-random noise to satisfy Swarm Gate.
-            let time_val = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().subsec_nanos() as f32;
+            let time_val = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos() as f32;
             let fake_noise = (time_val * 0.0001).sin() * 50.0 - 50.0;
             self.biological_rhythm = self.biological_rhythm * 0.9 + fake_noise * 0.1;
         }
-        
+
         // Ensure Identity Key is derived if not initialized yet and pool has entropy
         if self.entropy_pool.len() >= 256 {
             let new_key = crate::crypto::tesseract_hash(&self.entropy_pool);
@@ -324,15 +351,15 @@ impl ZeroTrustLedger {
     pub fn tick_ebbinghaus_decay(&mut self, dt_ms: f32) {
         // HORIZON[P2]: Implement Proof-of-Time credit minting by dynamically increasing `biological_credit` based on the density of harvested entropy and the elapsed `dt_ms`.
         self.harvest_biological_rhythm();
-        
+
         let mut current_trust = self.get_trust();
-        // NYX Residue: The absolute lowest threshold of trust is not 0.0, 
+        // NYX Residue: The absolute lowest threshold of trust is not 0.0,
         // leaving a subnormal float footprint for subconscious intuition mapping.
-        let nyx_residue = f32::from_bits(1); 
-        
+        let nyx_residue = f32::from_bits(1);
+
         if current_trust > nyx_residue {
             // Scale decay by delta-time (baseline was 0.05 per arbitrary frame, now 0.005 per ms)
-            current_trust -= 0.005 * dt_ms; 
+            current_trust -= 0.005 * dt_ms;
             if current_trust < nyx_residue {
                 current_trust = nyx_residue;
             }
@@ -406,8 +433,9 @@ impl ZeroTrustLedger {
     ) {
         // Biometric Keystroke Entropy Synthesis
         // HORIZON[P3]: Extract highly reliable entropy from keystroke inter-arrival variance.
-        self.entropy_pool.extend_from_slice(&(text.len() as u64).to_le_bytes());
-        
+        self.entropy_pool
+            .extend_from_slice(&(text.len() as u64).to_le_bytes());
+
         if text.contains("<EXECUTE:Konsole>") {
             self.execute_intent(ExecutionIntent::Konsole);
         }
@@ -418,27 +446,29 @@ impl ZeroTrustLedger {
             self.execute_intent(ExecutionIntent::Obsidian);
         }
         if let Some(start) = text.find("<BROWSE:")
-            && let Some(end) = text[start..].find(">") {
-                let url = &text[start + 8..start + end];
-                let url_string = url.to_string();
-                let tx_clone = bus.clone();
-                let tokenizer_clone = tokenizer.clone();
-                std::thread::spawn(move || {
-                    tracing::info!("Zero-Trust Web Cortex fetching: {}", url_string);
-                    if let Ok(res) = reqwest::blocking::get(&url_string)
-                        && let Ok(body) = res.text() {
-                            let snippet = if body.len() > 1000 {
-                                &body[..1000]
-                            } else {
-                                &body
-                            };
-                            if let Ok(encoding) = tokenizer_clone.encode(snippet, true) {
-                                for &id in encoding.get_ids() {
-                                    tx_clone.push(SensoryEvent::KeyboardHash(id));
-                                }
-                            }
+            && let Some(end) = text[start..].find(">")
+        {
+            let url = &text[start + 8..start + end];
+            let url_string = url.to_string();
+            let tx_clone = bus.clone();
+            let tokenizer_clone = tokenizer.clone();
+            std::thread::spawn(move || {
+                tracing::info!("Zero-Trust Web Cortex fetching: {}", url_string);
+                if let Ok(res) = reqwest::blocking::get(&url_string)
+                    && let Ok(body) = res.text()
+                {
+                    let snippet = if body.len() > 1000 {
+                        &body[..1000]
+                    } else {
+                        &body
+                    };
+                    if let Ok(encoding) = tokenizer_clone.encode(snippet, true) {
+                        for &id in encoding.get_ids() {
+                            tx_clone.push(SensoryEvent::KeyboardHash(id));
                         }
-                });
-            }
+                    }
+                }
+            });
+        }
     }
 }

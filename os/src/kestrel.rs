@@ -3,10 +3,10 @@ use std::io::{Read, Write};
 use std::panic;
 
 use prismatic_core::SensoryEvent;
-use std::backtrace::Backtrace;
-use tokenizers::Tokenizer;
-use std::sync::Arc;
 use prismatic_core::bus::EventBus;
+use std::backtrace::Backtrace;
+use std::sync::Arc;
+use tokenizers::Tokenizer;
 
 // Pre-allocated static buffer to avoid heap-allocation during Out-Of-Memory panics
 static mut PANIC_BUFFER: [u8; 8192] = [0; 8192];
@@ -77,7 +77,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
         };
 
         // Async io_uring Device Polling
-        // Binds `/dev/input/event0` to the Linux `io_uring` instance, allowing the kernel to asynchronously 
+        // Binds `/dev/input/event0` to the Linux `io_uring` instance, allowing the kernel to asynchronously
         // push hardware events directly into our memory ring buffer without performing context-switching system calls.
         use std::os::unix::io::AsRawFd;
         let fd = file.as_raw_fd();
@@ -88,15 +88,17 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
                 return;
             }
         };
-        
+
         // FFI Boundary Benchmarking
         // Setup tracing spans across the C/Rust FFI boundary when polling io_uring completions.
         // We need to measure if the kernel-to-userspace completion queue causes any hidden
         // latency spikes that could bottleneck the LockFreeEventBus under heavy contention.
         let mut event_buf = [0u8; std::mem::size_of::<InputEvent>()];
-        
+
         loop {
-            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
+            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             let read_e = io_uring::opcode::Read::new(
                 io_uring::types::Fd(fd),
                 event_buf.as_mut_ptr(),
@@ -104,7 +106,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
             )
             .build()
             .user_data(1);
-            
+
             unsafe {
                 if ring.submission().push(&read_e).is_err() {
                     continue;
@@ -113,8 +115,12 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
             if ring.submit_and_wait(1).is_err() {
                 continue;
             }
-            
-            let cqe = if let Some(cqe) = ring.completion().next() { cqe } else { continue };
+
+            let cqe = if let Some(cqe) = ring.completion().next() {
+                cqe
+            } else {
+                continue;
+            };
             if cqe.result() == event_buf.len() as i32 {
                 let event: InputEvent = unsafe { std::ptr::read(event_buf.as_ptr() as *const _) };
                 if event.type_ == 1 && event.value == 1 {
@@ -197,7 +203,9 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
 
         let mut buf = [0u8; 3];
         loop {
-            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
+            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             if file.read_exact(&mut buf).is_ok() {
                 let dx = buf[1] as i8 as f32;
                 let dy = buf[2] as i8 as f32;
@@ -247,7 +255,9 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
         let prev_right_mass = 0.0;
 
         loop {
-            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
+            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             if let Ok((buf, _meta)) = stream.next() {
                 let len_pairs = buf.len() / 2;
                 if len_pairs == 0 {
@@ -266,7 +276,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
                         || (0.0f32, 0.0f32),
                         |(mut l, mut r), (i, chunk)| {
                             let y = chunk[0] as f32;
-                            // Each 4-byte chunk represents 2 pixels (Y U Y V). 
+                            // Each 4-byte chunk represents 2 pixels (Y U Y V).
                             // i is the chunk index. Since each chunk is 2 pixels, x_coord is (i * 2) % 640
                             let x_coord = (i * 2) % 640;
                             if x_coord < 320 {

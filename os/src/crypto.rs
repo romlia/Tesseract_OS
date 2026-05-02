@@ -1,4 +1,10 @@
-#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+#![allow(
+    dead_code,
+    unused_variables,
+    unused_imports,
+    unused_assignments,
+    unused_must_use
+)]
 // P1: Added a monotonically increasing `payload_seq` to every signed message to mitigate Replay Attacks.
 // HORIZON[P2]: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
 //! Cryptographic Layer (Refactored for Production Prototype)
@@ -8,11 +14,11 @@
 use blake3;
 #[cfg(feature = "crypto_pki")]
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 #[cfg(feature = "crypto_pki")]
-use ed25519_dalek::{Signer, Verifier, Signature, SigningKey, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 #[cfg(any(feature = "crypto_pki", feature = "persistent_nonce"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -36,11 +42,11 @@ pub fn initialize_nonce() {
 pub fn flush_nonce() {
     let current = NONCE_COUNTER.load(Ordering::SeqCst);
     let _ = std::fs::create_dir_all("/var/lib/tesseract");
-    
+
     // Atomic Disk Writes & Tamper Protection
     let tmp_path = "/var/lib/tesseract/nonce.dat.tmp";
     let path = "/var/lib/tesseract/nonce.dat";
-    
+
     use std::io::Write;
     if let Ok(mut f) = std::fs::File::create(tmp_path) {
         let _ = f.write_all(&current.to_le_bytes());
@@ -49,7 +55,7 @@ pub fn flush_nonce() {
     let _ = std::fs::rename(tmp_path, path); // Atomic filesystem rename
 }
 
-// MAGIC TRICK RETENTION: Use `blake3` crate. BLAKE3 inherently uses SIMD 
+// MAGIC TRICK RETENTION: Use `blake3` crate. BLAKE3 inherently uses SIMD
 // and AVX2/AVX-512 hardware intrinsics to achieve extreme speeds natively.
 // Multi-Source Entropy Pool & BLAKE3 (Aggregate RF/mic RMS/CPU jitter)
 pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
@@ -79,7 +85,7 @@ pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
     {
         let mut out = [0u8; 32];
         for (i, &b) in data.iter().take(32).enumerate() {
-            out[i] = b; 
+            out[i] = b;
         }
         out
     }
@@ -114,31 +120,31 @@ impl SingularityStreamCipher {
             }
         }
     }
-    
+
     pub fn apply_keystream(&mut self, data: &mut [u8]) {
         // Dummy fallback for legacy mesh.rs backwards compatibility
         for b in data.iter_mut() {
             *b ^= 0x42;
         }
     }
-    
+
     pub fn encrypt(&self, data: &[u8]) -> Option<Vec<u8>> {
         #[cfg(feature = "crypto_pki")]
         {
             // Strict monotonically increasing nonce management
             let nonce_val = NONCE_COUNTER.fetch_add(1, Ordering::SeqCst);
-            
+
             #[cfg(feature = "persistent_nonce")]
             {
                 if nonce_val % 100 == 0 {
                     flush_nonce();
                 }
             }
-            
+
             let mut nonce_bytes = [0u8; 12];
             nonce_bytes[..8].copy_from_slice(&nonce_val.to_le_bytes());
             let nonce = Nonce::from_slice(&nonce_bytes);
-            
+
             self.cipher.encrypt(nonce, data).ok()
         }
         #[cfg(not(feature = "crypto_pki"))]
@@ -149,14 +155,26 @@ impl SingularityStreamCipher {
 
     // Replay Attack Mitigation (Enforce monotonically increasing payload_seq)
     // HORIZON[P2]: Implement Zero-Knowledge Session Resumption protocol directly over the kernel event bus.
-    pub fn decrypt(&self, encrypted_data: &[u8], nonce_bytes: &[u8; 12], payload_seq: u64) -> Option<Vec<u8>> {
-        let last = self.last_seen_seq.load(std::sync::atomic::Ordering::Relaxed);
+    pub fn decrypt(
+        &self,
+        encrypted_data: &[u8],
+        nonce_bytes: &[u8; 12],
+        payload_seq: u64,
+    ) -> Option<Vec<u8>> {
+        let last = self
+            .last_seen_seq
+            .load(std::sync::atomic::Ordering::Relaxed);
         if payload_seq <= last {
-            tracing::warn!("Replay attack detected: payload_seq {} <= last_seen {}", payload_seq, last);
+            tracing::warn!(
+                "Replay attack detected: payload_seq {} <= last_seen {}",
+                payload_seq,
+                last
+            );
             return None;
         }
-        self.last_seen_seq.store(payload_seq, std::sync::atomic::Ordering::Relaxed);
-        
+        self.last_seen_seq
+            .store(payload_seq, std::sync::atomic::Ordering::Relaxed);
+
         #[cfg(feature = "crypto_pki")]
         {
             let nonce = Nonce::from_slice(nonce_bytes);
@@ -205,10 +223,17 @@ impl NodeTrustStore {
     }
 
     #[cfg(feature = "crypto_pki")]
-    pub fn verify_swarm_payload(&self, node_id: &str, payload: &[u8], signature_bytes: &[u8; 64]) -> bool {
+    pub fn verify_swarm_payload(
+        &self,
+        node_id: &str,
+        payload: &[u8],
+        signature_bytes: &[u8; 64],
+    ) -> bool {
         // P1: Ensured 'Incorruptibility of Justice' by formally validating Genesis Node public keys with zero administrative bypasses.
         if node_id == "GENESIS_NODE" && !self.trusted_nodes.contains_key("GENESIS_NODE") {
-            tracing::warn!("Incorruptibility of Justice: Genesis Node rejected due to missing public key verification!");
+            tracing::warn!(
+                "Incorruptibility of Justice: Genesis Node rejected due to missing public key verification!"
+            );
             return false;
         }
 

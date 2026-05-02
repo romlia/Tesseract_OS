@@ -1,16 +1,16 @@
 use prismatic_acoustics::run_cpal_gradient_loop;
-use prismatic_core::{SensoryEvent, GlobalContext, temporal};
+use prismatic_core::{GlobalContext, SensoryEvent, temporal};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokenizers::Tokenizer;
-use std::sync::atomic::Ordering;
 
 pub fn run_headless(
     state: Arc<GlobalContext>,
     bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>>,
 ) {
     tracing::info!("Headless mode engaged. Running without Wayland compositor...");
-    
+
     // 4. Initialize Cochlea & Vocal Cords (Async Background)
     tracing::info!("Spawning CPAL Audio Drivers into background...");
     let tx_audio = bus.clone();
@@ -27,7 +27,7 @@ pub fn run_headless(
 
     // Phase 9: Initialize Nebula Blockchain Shadow Node
     crate::mesh::spawn_nebula_shadow_node(state.clone());
-    
+
     // Phase 11: Initialize Planetary I/O Membrane
     crate::io_membrane::spawn_io_membrane(state.clone());
 
@@ -51,7 +51,7 @@ pub fn run_headless(
         }
 
         std::thread::sleep(Duration::from_millis(50));
-        
+
         zero_trust.tick_ebbinghaus_decay(50.0);
 
         // Handle hardware biometric consent
@@ -77,7 +77,7 @@ pub fn run_headless(
                 print!("{}", text);
                 use std::io::Write;
                 std::io::stdout().flush().unwrap();
-                
+
                 zero_trust.process_text_stream(&text, &tx_web, &tokenizer);
             }
         }
