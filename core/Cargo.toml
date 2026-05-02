@@ -4,7 +4,6 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-
 wgpu.workspace = true
 reqwest.workspace = true
 bytemuck.workspace = true
@@ -19,3 +18,12 @@ tracing.workspace = true
 lazy_static = "1.5.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+
+[features]
+default = ["mvp_runtime"]
+mvp_runtime = []
+legacy_fractals = []
+cpu_fallback = []
+persistent_nonce = []
+warm_gpu_context = []
+heterogeneous_simd = []

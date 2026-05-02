@@ -30,7 +30,7 @@ WORKDIR /app
 COPY . .
 
 # Build the OS
-WORKDIR /app/v35-Prismatic-OS
+WORKDIR /app/Tesseract_OS
 RUN cargo build --release
 
 # The runtime image
@@ -56,10 +56,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy the ALSA configuration to force PulseAudio routing
-COPY v35-Prismatic-OS/asound.conf /etc/asound.conf
+COPY Tesseract_OS/asound.conf /etc/asound.conf
 
 # Copy the compiled binary
-COPY --from=builder /app/v35-Prismatic-OS/target/release/prismatic-os /usr/local/bin/prismatic-os
+COPY --from=builder /app/Tesseract_OS/target/release/prismatic-os /usr/local/bin/prismatic-os
 
 # Execute the OS directly on bare metal
 CMD ["prismatic-os"]

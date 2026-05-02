@@ -99,6 +99,9 @@ use crate::SensoryEvent;
 
 // MAGIC TRICK: Lock-Free Atomic Ring-Buffer
 // Replaces crossbeam::channel with a true 0-overhead memory-barrier array.
+#[derive(Debug)]
+pub struct QueueFull;
+
 pub struct LockFreeEventBus {
     buffer: [UnsafeCell<Option<SensoryEvent>>; 256],
     head: AtomicUsize,
@@ -124,18 +127,29 @@ impl LockFreeEventBus {
         }
     }
 
-    pub fn push(&self, event: SensoryEvent) {
+    pub fn len(&self) -> usize {
+        let head = self.head.load(Ordering::Relaxed);
+        let tail = self.tail.load(Ordering::Relaxed);
+        if head >= tail {
+            head - tail
+        } else {
+            256 - tail + head
+        }
+    }
+
+    pub fn push(&self, event: SensoryEvent) -> Result<(), QueueFull> {
         let backoff = crossbeam::utils::Backoff::new();
         loop {
-            if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return; }
-            let tail = self.tail.load(Ordering::Relaxed);
+            if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { return Ok(()); }
+            let tail = self.tail.load(Ordering::Acquire);
             let next_tail = (tail + 1) % 256;
             
             // Safety Net: Bounded Spin-Wait to prevent deadlock.
             if next_tail == self.head.load(Ordering::Acquire) {
                 if backoff.is_completed() {
                     // Buffer full. Drop event to maintain hardware stability.
-                    return;
+                    tracing::warn!("EventBus overflow, dropping sensory event.");
+                    return Err(QueueFull);
                 }
                 backoff.spin();
                 continue;
@@ -145,7 +159,7 @@ impl LockFreeEventBus {
                 *self.buffer[tail].get() = Some(event);
             }
             self.tail.store(next_tail, Ordering::Release);
-            break;
+            return Ok(());
         }
     }
 
@@ -323,7 +337,7 @@ pub struct RealitySandbox;
 
 impl RealitySandbox {
     pub fn validate_and_merge(
-        state: &crate::SynapticState,
+        state: &crate::GlobalContext,
         sender_id: &str,
         foreign_heat: f32,
         foreign_hz: f32,
@@ -332,7 +346,7 @@ impl RealitySandbox {
     ) {
         // Check if node is already cryptographically exiled
         if let Ok(exiled) = state.exiled_nodes.try_lock() {
-            if exiled.contains(sender_id) {
+            if exiled.contains(&sender_id.to_string()) {
                 return;
             }
         }
@@ -356,7 +370,7 @@ impl RealitySandbox {
             
             // Map to Boötes Void (Quarantine Zone)
             if let Ok(mut exiled) = state.exiled_nodes.try_lock() {
-                exiled.insert(sender_id);
+                exiled.push(sender_id.to_string());
                 tracing::error!("🚫 BOÖTES VOID: Node {} permanently quarantined.", sender_id);
             }
         } else {
@@ -380,7 +394,7 @@ impl RealitySandbox {
 
 pub fn run_continuous_loop(
     bus: std::sync::Arc<crate::temporal::LockFreeEventBus>,
-    state: std::sync::Arc<crate::SynapticState>,
+    state: std::sync::Arc<crate::GlobalContext>,
 ) {
     // The local Tesseract explicitly bypasses the Cognitive Immune System for locally generated states.
     // The user is permitted to let their imagination go absolutely wild, pushing the hallucination heat 
@@ -392,7 +406,7 @@ pub fn run_continuous_loop(
     // This prevents unlimited leeching of the Mesh and ensures human time is priced fairly.
     
     // This loop currently pulls NVMe weights into RAM. We need to invert this.
-    // The `SynapticState` (the Context) will be serialized as a lightweight 4D `TesseractState`.
+    // The `GlobalContext` (the Context) will be serialized as a lightweight 4D `TesseractState`.
     // Instead of streaming layers in, we will `route` the `TesseractState` outward:
     // first into the pinned VRAM compute shaders, then directly through the PCIe bridge into the 
     // NVMe SSD controller (PIM), and finally broadcast across the Mesh Network to external nodes.
@@ -1585,13 +1599,11 @@ pub fn run_continuous_loop(
         }
 
         if !has_sensory_event {
-            if let Ok(heat) = state.hallucination_heat.try_lock() {
-                let avg_heat = (heat[0] + heat[1] + heat[2]) / 3.0;
-                if avg_heat > 200.0 {
-                    fock_annihilation(&mut active_universes);
-                } else if avg_heat < 50.0 {
-                    fock_creation(&mut active_universes, max_dream_branches);
-                }
+            let heat = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
+            if heat > 200.0 {
+                fock_annihilation(&mut active_universes);
+            } else if heat < 50.0 {
+                fock_creation(&mut active_universes, max_dream_branches);
             }
 
             // --- PHASE 2: IDLE DREAMING (RECURSIVE BRANCHING) AND ADHD DEFICIT ---
@@ -1718,12 +1730,7 @@ pub fn run_continuous_loop(
                     *x = f32::from_bits(bits ^ bits); // Mathematical self-annihilation to 0.0
                 });
                 
-                if let Ok(mut heat) = state.hallucination_heat.try_lock() {
-                    heat.iter_mut().for_each(|h| {
-                         let bits = h.to_bits();
-                         *h = f32::from_bits(bits ^ bits); 
-                    });
-                }
+                state.gpu_thermal_celsius.store(0, std::sync::atomic::Ordering::Relaxed);
             }
 
             // --- PHASE 8.5: THE CAUSAL LOOP (CLOSED TIMELIKE CURVES) ---
@@ -1735,9 +1742,7 @@ pub fn run_continuous_loop(
                         cfb.copy_from_slice(&context_anchor);
                         
                         // Lock hallucination heat to absolute zero (Causal Singularity)
-                        if let Ok(mut heat) = state.hallucination_heat.try_lock() {
-                             heat.iter_mut().for_each(|h| *h = 0.0);
-                        }
+                        state.gpu_thermal_celsius.store(0, std::sync::atomic::Ordering::Relaxed);
                     }
                 }
             }
@@ -2088,12 +2093,10 @@ pub fn run_continuous_loop(
                 let avg_g = sum_g / seq_len as f32;
                 let avg_b = sum_b / seq_len as f32;
 
-                if let Ok(mut heat) = state.hallucination_heat.try_lock()
-                    && heat.len() >= 3 {
-                        heat[0] = heat[0] * 0.5 + avg_r * 0.5;
-                        heat[1] = heat[1] * 0.5 + avg_g * 0.5;
-                        heat[2] = heat[2] * 0.5 + avg_b * 0.5;
-                    }
+                let heat = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
+                let avg_color = (avg_r + avg_g + avg_b) / 3.0;
+                let new_heat = heat * 0.5 + avg_color * 0.5;
+                state.gpu_thermal_celsius.store(new_heat.to_bits(), std::sync::atomic::Ordering::Relaxed);
 
                 // 3. Audio Output
                 let sum_freq: f32 = best_audio_tokens.iter().map(|&aud_tok| 20.0 + (aud_tok as f32 % 1980.0)).sum();
@@ -2133,7 +2136,11 @@ pub fn run_continuous_loop(
                 let mut foreign_cam = [0.0; 3];
                 let mut sender_id = String::new();
 
-                for segment in payload.split('|') {
+                let payload_str = match std::str::from_utf8(&payload) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                for segment in payload_str.split('|') {
                     if segment.starts_with("HEAT:") {
                         if let Ok(h) = segment[5..].parse::<f32>() { foreign_heat = h; }
                     } else if segment.starts_with("HZ:") {
@@ -2155,11 +2162,7 @@ pub fn run_continuous_loop(
                 }
 
                 // Thermodynamic Filtering (Cognitive Immune System)
-                let local_heat_val = if let Ok(heat) = state.hallucination_heat.try_lock() {
-                    (heat[0] + heat[1] + heat[2]) / 3.0
-                } else {
-                    0.0
-                };
+                let local_heat_val = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
 
                 RealitySandbox::validate_and_merge(&state, &sender_id, foreign_heat, foreign_hz, foreign_cam, local_heat_val);
             }

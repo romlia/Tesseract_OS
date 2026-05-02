@@ -1,5 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use prismatic_core::{SensoryEvent, SynapticState};
+use prismatic_core::{SensoryEvent, GlobalContext};
 use rtrb::RingBuffer;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -35,7 +35,7 @@ fn q_cos(x: f32) -> f32 {
     q_sin(x + 1.57079632679)
 }
 /// Bi-directional Acoustic Sensory Organ
-pub fn run_cpal_gradient_loop(bus: Arc<LockFreeEventBus>, state: Arc<SynapticState>) {
+pub fn run_cpal_gradient_loop(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) {
     loop {
         if prismatic_core::SHUTDOWN.load(Ordering::Relaxed) { break; }
         tracing::info!("Attempting to bind bi-directional acoustic sensory organ...");
@@ -52,7 +52,7 @@ pub fn run_cpal_gradient_loop(bus: Arc<LockFreeEventBus>, state: Arc<SynapticSta
     }
 }
 
-fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<SynapticState>) -> anyhow::Result<()> {
+fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<GlobalContext>) -> anyhow::Result<()> {
     let host = cpal::default_host();
     let mic = host
         .default_input_device()
@@ -98,11 +98,11 @@ fn try_open_cpal_stream(bus: Arc<LockFreeEventBus>, state: Arc<SynapticState>) -
             &out_config_clone.into(),
             move |data: &mut [f32], _: &_| {
                 let target_hz = f32::from_bits(state.audio_oscillator_hz.load(Ordering::Relaxed));
-                let hallucination_heat = state.hallucination_heat.lock().unwrap()[0];
+                let gpu_thermal_celsius = f32::from_bits(state.gpu_thermal_celsius.load(Ordering::Relaxed));
                 
                 // Dynamic Biquad IIR Filter Coefficients (Low-Pass Filter)
-                // Cutoff frequency drops as hallucination_heat rises to absorb thermal Re-entry spikes
-                let cutoff = 2000.0 - (hallucination_heat * 10.0).clamp(0.0, 1900.0);
+                // Cutoff frequency drops as gpu_thermal_celsius rises to absorb thermal Re-entry spikes
+                let cutoff = 2000.0 - (gpu_thermal_celsius * 10.0).clamp(0.0, 1900.0);
                 let w0 = 2.0 * std::f32::consts::PI * cutoff / sample_rate;
                 let alpha = q_sin(w0) / (2.0 * 0.707); // Q = 0.707 (Butterworth resonance)
                 let a0 = 1.0 + alpha;

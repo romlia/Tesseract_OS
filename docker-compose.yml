@@ -4,7 +4,7 @@ services:
   prismatic-singularity:
     build:
       context: ..
-      dockerfile: v35-Prismatic-OS/Dockerfile
+      dockerfile: Tesseract_OS/Dockerfile
     privileged: true
     devices:
       - "/dev/dri:/dev/dri"
@@ -16,12 +16,12 @@ services:
       - video
       - render
       - audio
-    working_dir: /app/v35-Prismatic-OS
+    working_dir: /app/Tesseract_OS
     volumes:
       - "../:/app"
-      - "/home/frontend/.cache/huggingface:/root/.cache/huggingface"
-      - "/run/user/1001/pulse/native:/tmp/pulse-socket"
-      - "/run/user/1001/wayland-0:/tmp/wayland-0"
+      - "/home/jarvis/.cache/huggingface:/root/.cache/huggingface"
+      - "/run/user/1000/pulse/native:/tmp/pulse-socket"
+      - "/run/user/1000/wayland-0:/tmp/wayland-0"
       - "~/.config/pulse/cookie:/root/.config/pulse/cookie:ro"
     environment:
       - RUST_LOG=info

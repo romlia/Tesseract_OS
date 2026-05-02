@@ -4,10 +4,9 @@ version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-prismatic-core = { path = "../core" }
+prismatic-core = { path = "../core", features = [] }
 prismatic-acoustics = { path = "../acoustics" }
 prismatic-glass = { path = "../glass" }
-
 wgpu.workspace = true
 rust_drm.workspace = true
 gbm.workspace = true
@@ -29,3 +28,20 @@ crossbeam.workspace = true
 pollster.workspace = true
 memmap2 = "0.9.4"
 drm = "0.11"
+blake3 = { version = "1.5.1", features = ["rayon"], optional = true }
+chacha20poly1305 = { version = "0.10.1", optional = true }
+ed25519-dalek = { version = "2.1.1", optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = ["mvp_runtime"]
+mvp_runtime = []
+legacy_fractals = []
+optical_flow = []
+crypto_pki = ["dep:blake3", "dep:chacha20poly1305", "dep:ed25519-dalek"]
+sdf_ui = []
+cpu_fallback = []
+persistent_nonce = []
+warm_gpu_context = []
+heterogeneous_simd = []

@@ -13,8 +13,8 @@ pub mod io_membrane;
 // mod text_renderer;
 
 use prismatic_acoustics::run_cpal_gradient_loop;
-use prismatic_core::{SensoryEvent, SynapticState, temporal};
-use prismatic_glass::CarnotThermodynamics;
+use prismatic_core::{SensoryEvent, GlobalContext, temporal};
+// use prismatic_glass::CarnotThermodynamics;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokenizers::Tokenizer;
@@ -30,15 +30,60 @@ fn main() {
 
     kestrel::initialize_kestrel_hook();
 
+    // [COMMERCIALIZATION TODO]: Runtime SIMD Detection & Diagnostic API
+    // Before spinning up the primary inference thread, query `wgpu::Adapter::limits()`.
+    // If the underlying GPU does not support 128-bit vector memory alignment,
+    // dynamically swap the WGSL compute module to the `heterogeneous_simd` scalar fallback.
+    // Expose a lightweight Diagnostic API (e.g., via Unix Domain Socket) that reports 
+    // which shader variant is active to aid in debugging mixed-hardware deployments.
+
     tracing::info!("=== J.A.R.V.I.S. V36 Prismatic OS Boot Sequence ===");
 
-    let state = Arc::new(SynapticState::new(
+    tracing::info!("Initializing Hardware PID Controller...");
+    let pid_cfg = prismatic_core::PIDController::calibrate_on_boot();
+    tracing::info!("PID Configuration Locked: P={:.3}, I={:.3}, D={:.3}", pid_cfg.p_gain, pid_cfg.i_gain, pid_cfg.d_gain);
+
+    let state = Arc::new(GlobalContext::new(
         prismatic_core::temporal::LILITH_CONFIG.hidden_size,
     ));
     
     // Replaced standard channels with the Superconductive Spine (LockFreeEventBus)
     // to achieve true lock-free concurrent sensory event ingestion across all threads.
     let bus = Arc::new(LockFreeEventBus::new());
+
+    // Health-Monitoring Watchdog Daemon
+    let watchdog_context = Arc::clone(&state);
+    let watchdog_bus = Arc::clone(&bus);
+    std::thread::spawn(move || {
+        tracing::info!("Health-Monitoring Watchdog initialized.");
+        loop {
+            if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
+            
+            let temp = watchdog_context.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed);
+            let limit = watchdog_context.thermal_limit_celsius.load(std::sync::atomic::Ordering::Relaxed);
+            // let epochs = watchdog_context.event_epoch_seq.load(std::sync::atomic::Ordering::Relaxed);
+            
+            // Severe back-pressure detection (>80% full queue on a 256 capacity queue)
+            if watchdog_bus.len() > 204 {
+                tracing::warn!("WATCHDOG ALARM: Severe Back-Pressure! Queue capacity at {}/256.", watchdog_bus.len());
+            }
+            
+            // Thermal emergency shutdown
+            if temp >= limit {
+                tracing::error!("WATCHDOG ALARM: Thermal Limit Exceeded ({}C >= {}C)! Initiating ACPI Power-Off...", temp, limit);
+                prismatic_core::SHUTDOWN.store(true, std::sync::atomic::Ordering::SeqCst);
+                std::thread::sleep(std::time::Duration::from_millis(500)); // Allow pipelines to drain
+                
+                // Graceful Bare-Metal Shutdown: Manually write dump, then issue ACPI poweroff
+                let dump_msg = format!("WATCHDOG THERMAL MELTDOWN ({}C)\nPipelines drained gracefully.", temp);
+                let _ = std::fs::write("CRASH_DUMP_V35.log", dump_msg);
+                let _ = std::process::Command::new("poweroff").spawn();
+                std::process::exit(1);
+            }
+            
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
+    });
 
     // Graceful Termination Hook
     let tx_ctrlc = bus.clone();
@@ -48,18 +93,18 @@ fn main() {
         tx_ctrlc.push(SensoryEvent::Terminate);
     }).expect("Error setting Ctrl-C handler");
 
-    let thermo = CarnotThermodynamics::new();
+
 
     let is_headless = std::env::var("WAYLAND_DISPLAY").is_err() && std::env::var("DISPLAY").is_err();
     if is_headless {
         run_headless(state, bus);
     } else {
-        run_bare_metal(state, bus, thermo);
+        run_bare_metal(state, bus);
     }
 }
 
 fn run_headless(
-    state: Arc<SynapticState>,
+    state: Arc<GlobalContext>,
     bus: Arc<LockFreeEventBus>,
 ) {
     tracing::info!("Headless mode engaged. Running without Wayland compositor...");
@@ -136,9 +181,8 @@ fn run_headless(
 }
 
 fn run_bare_metal(
-    state: Arc<SynapticState>,
+    state: Arc<GlobalContext>,
     bus: Arc<LockFreeEventBus>,
-    mut thermo: CarnotThermodynamics,
 ) {
     tracing::info!("Initializing Bare-Metal DRM/KMS Fallback Framebuffer...");
     
@@ -356,9 +400,8 @@ fn run_bare_metal(
             break;
         }
 
-        // Carnot Thermodynamics Dilation
-        thermo.regulate_efficiency(&state);
-        zero_trust.tick_ebbinghaus_decay(thermo.dt_ms as f32);
+        // Fixed 60FPS UI delta time
+        zero_trust.tick_ebbinghaus_decay(16.6);
 
         let mut drained = Vec::new();
         while let Some(token) = state.vocal_chord.pop() {
@@ -384,9 +427,9 @@ fn run_bare_metal(
         }
 
         // Sync heat
-        if let Ok(heat) = state.hallucination_heat.try_lock() {
-            queue.write_buffer(&heat_buffer, 0, bytemuck::cast_slice(&heat));
-        }
+        let heat = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
+        let heat_arr = [heat, heat, heat];
+        queue.write_buffer(&heat_buffer, 0, bytemuck::cast_slice(&heat_arr));
 
         // Idle logic
         let target_idle = if pretext.is_empty { 1.0 } else { 0.0 };

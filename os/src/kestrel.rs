@@ -88,6 +88,11 @@ pub fn spawn_optic_nerve(bus: Arc<LockFreeEventBus>, tokenizer: Tokenizer) {
                 return;
             }
         };
+        
+        // [COMMERCIALIZATION TODO]: FFI Boundary Benchmarking
+        // Setup tracing spans across the C/Rust FFI boundary when polling io_uring completions.
+        // We need to measure if the kernel-to-userspace completion queue causes any hidden
+        // latency spikes that could bottleneck the LockFreeEventBus under heavy contention.
         let mut event_buf = [0u8; std::mem::size_of::<InputEvent>()];
         
         loop {
@@ -208,6 +213,7 @@ pub fn spawn_optic_nerve(bus: Arc<LockFreeEventBus>, tokenizer: Tokenizer) {
     });
 
     let tx_cam = bus.clone();
+    #[cfg(feature = "optical_flow")]
     std::thread::spawn(move || {
         tracing::info!("Binding Kestrel to /dev/video0 for raw visual ingestion...");
         let dev = match v4l::Device::new(0) {
@@ -250,8 +256,10 @@ pub fn spawn_optic_nerve(bus: Arc<LockFreeEventBus>, tokenizer: Tokenizer) {
                     continue;
                 }
 
-                // Gestural Kinetic Sweep detection via Optical Flow approximation
-                use rayon::prelude::*;
+                // TODO: Disabled optical flow CPU parallel reduction for performance.
+                // Gestural Kinetic Sweep detection via Optical Flow approximation is too expensive.
+                // In a production system, use a low-res background worker or DSP.
+                /*
                 // Task 1: Vectorized Optical Flow using Rayon parallel reduction
                 let (left_mass, right_mass) = buf
                     .par_chunks_exact(4)
@@ -291,6 +299,7 @@ pub fn spawn_optic_nerve(bus: Arc<LockFreeEventBus>, tokenizer: Tokenizer) {
 
                 prev_left_mass = left_mass;
                 prev_right_mass = right_mass;
+                */
 
                 for _ in 0..64 {
                     // Randomly sample 64 pixels to keep bandwidth low

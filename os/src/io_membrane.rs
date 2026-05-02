@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use prismatic_core::SynapticState;
+use prismatic_core::GlobalContext;
 
 /// The Cryptographic Virtual File System (VFS)
 /// Wraps all external drive reads in the Social Contract Operator and BloomFilter verification.
@@ -34,7 +34,7 @@ impl CryptographicVfs {
 
 /// Planetary I/O Membrane
 /// Detects physical hardware insertions via native Netlink sockets and initiates Zero-Copy DMA-BUF transfers.
-pub fn spawn_io_membrane(_state: Arc<SynapticState>) {
+pub fn spawn_io_membrane(_state: Arc<GlobalContext>) {
     tracing::info!("Initializing Planetary I/O Membrane (Zero-Trust Hardware Detection)...");
     
     std::thread::spawn(move || {

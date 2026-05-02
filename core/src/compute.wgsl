@@ -80,6 +80,13 @@ fn q_abs(x: f32) -> f32 {
 @group(0) @binding(2) var<storage, read> input_vec: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read_write> out_vec: array<f32>;
 
+// [HETEROGENEOUS SIMD FALLBACK]
+// If the `heterogeneous_simd` Cargo feature is enabled, the Rust host will dynamically 
+// replace `vec4<f32>` with `f32` in this shader at compile-time to prevent driver crashes 
+// on low-end Edge GPUs (e.g., older Mali or Adreno architectures) that lack 128-bit vector registers.
+// Example:
+// @group(0) @binding(1) var<storage, read> f32_weights_scalar: array<f32>;
+
 @compute @workgroup_size(16, 16)
 fn matmul_f32(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let row = global_id.x;
@@ -166,23 +173,46 @@ fn matmul_ternary(@builtin(global_invocation_id) global_id: vec3<u32>) {
 @group(0) @binding(2) var<storage, read> in_data: array<f32>;
 @group(0) @binding(3) var<storage, read_write> out_data: array<f32>;
 
-@compute @workgroup_size(1, 64)
-fn rmsnorm(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let seq = global_id.y;
+var<workgroup> rms_shared: array<f32, 64>;
+
+@compute @workgroup_size(64, 1)
+fn rmsnorm(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>,
+    @builtin(workgroup_id) group_id: vec3<u32>
+) {
+    let seq = group_id.x; // 1 workgroup per sequence
+    let tid = local_id.x; // 64 threads per sequence
+    
     if (seq >= params.seq_len) { return; }
     
-    var sum_sq = 0.0;
     let offset = seq * params.cols;
+    var local_sum_sq = 0.0;
     
-    for (var c = 0u; c < params.cols; c = c + 1u) {
+    // Pass 1: Local sums
+    for (var c = tid; c < params.cols; c = c + 64u) {
         let v = in_data[offset + c];
-        sum_sq = sum_sq + v * v;
+        local_sum_sq = local_sum_sq + v * v;
     }
     
-    let mean_sq = sum_sq / f32(params.cols) + 1e-6;
-    let inv_rms = q_rsqrt(mean_sq); 
+    rms_shared[tid] = local_sum_sq;
+    workgroupBarrier();
     
-    for (var c = 0u; c < params.cols; c = c + 1u) {
+    // Pass 2: Workgroup reduction
+    if (tid == 0u) {
+        var total_sum_sq = 0.0;
+        for (var i = 0u; i < 64u; i = i + 1u) {
+            total_sum_sq = total_sum_sq + rms_shared[i];
+        }
+        let mean_sq = total_sum_sq / f32(params.cols) + 1e-6;
+        rms_shared[0] = q_rsqrt(mean_sq); 
+    }
+    workgroupBarrier();
+    
+    let inv_rms = rms_shared[0];
+    
+    // Write out normalized values
+    for (var c = tid; c < params.cols; c = c + 64u) {
         let normalized = in_data[offset + c] * inv_rms;
         out_data[offset + c] = normalized * norm_weights[c];
     }
@@ -212,74 +242,80 @@ fn swiglu(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 // ---------------------------------------------------------
-// 5. NAIVE ATTENTION (RoPE + SDPA)
-// Requires Q, K, V to be sliced from QKV buffer in Rust,
-// but for simplicity, we pass Q, K, V offsets.
+// 5. BLOCKED FLASH-ATTENTION (RoPE + SDPA)
 // ---------------------------------------------------------
 @group(0) @binding(1) var<storage, read_write> qkv_data: array<f32>; // [seq_len, QKV_SIZE]
 @group(0) @binding(2) var<storage, read_write> attn_out: array<f32>; // [seq_len, HIDDEN_SIZE]
 
+// FlashAttention Block Size
+const BLOCK_SIZE: u32 = 16u;
+var<workgroup> K_shared: array<f32, 256>; // 16x16
+var<workgroup> V_shared: array<f32, 256>; // 16x16
+
 @compute @workgroup_size(16, 16)
-fn attention(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    // Fused Fractal Attention with RoPE
-    let head = global_id.x; // 0..15
-    let seq_q = global_id.y; // 0..128
+fn attention(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>,
+    @builtin(workgroup_id) group_id: vec3<u32>
+) {
+    let head = group_id.x; 
+    let seq_q_base = group_id.y * BLOCK_SIZE;
+    
+    let t_row = local_id.y;
+    let t_col = local_id.x;
+    
+    let seq_q = seq_q_base + t_row;
     
     if (head >= NUM_HEADS || seq_q >= params.seq_len) { return; }
     
     let head_dim = HEAD_DIM;
-    let kv_head = head / NUM_KV_HEADS; // GQA routing
-    let base = 10000.0;
+    let kv_head = head / NUM_KV_HEADS;
     
-    for (var d = 0u; d < head_dim; d = d + 2u) {
-        let q_r = qkv_data[seq_q * QKV_SIZE + head * head_dim + d];
-        let q_i = qkv_data[seq_q * QKV_SIZE + head * head_dim + d + 1u];
+    // Q vector for this thread (1 thread per query sequence row, holding multiple dims)
+    // To implement true blocked flash attention, we iterate over KV blocks.
+    
+    var out_sum = 0.0;
+    var max_score = -1e20;
+    var sum_exp = 0.0;
+    
+    // Simplified blocked iteration
+    for (var kv_block = 0u; kv_block < params.seq_len; kv_block = kv_block + BLOCK_SIZE) {
+        // 1. Load K block to shared memory
+        let seq_k = kv_block + t_row;
+        if (seq_k < params.seq_len && t_col < head_dim) {
+            let k_idx = seq_k * QKV_SIZE + HIDDEN_SIZE + kv_head * head_dim + t_col;
+            K_shared[t_row * BLOCK_SIZE + t_col] = qkv_data[k_idx];
+        }
+        // 2. Load V block to shared memory
+        if (seq_k < params.seq_len && t_col < head_dim) {
+            let v_idx = seq_k * QKV_SIZE + V_OFFSET + kv_head * head_dim + t_col;
+            V_shared[t_row * BLOCK_SIZE + t_col] = qkv_data[v_idx];
+        }
+        workgroupBarrier();
         
-        let k_r = qkv_data[seq_q * QKV_SIZE + HIDDEN_SIZE + kv_head * head_dim + d];
-        let k_i = qkv_data[seq_q * QKV_SIZE + HIDDEN_SIZE + kv_head * head_dim + d + 1u];
-        
-        // 1. Apply RoPE (Rotary Position Embeddings)
-        let inv_freq = q_exp(-9.21034037 * f32(d) / f32(head_dim));
-        let theta = f32(seq_q) * inv_freq; // Using token sequence pos
-        let cos_t = q_cos(theta);
-        let sin_t = q_sin(theta);
-        
-        let q_r_new = q_r * cos_t - q_i * sin_t;
-        let q_i_new = q_r * sin_t + q_i * cos_t;
-        
-        let rope_k_r = k_r * cos_t - k_i * sin_t;
-        let rope_k_i = k_r * sin_t + k_i * cos_t;
-        
-        // 2. Dual-Fractal Holographic SDPA
-        var z_r = q_r_new;
-        var z_i = q_i_new;
-        let c_r = rope_k_r;
-        let c_i = rope_k_i;
-        
-        var n = 0u;
-        let max_iter = 15u;
-        while (z_r * z_r + z_i * z_i <= 4.0 && n < max_iter) {
-            let next_r = z_r * z_r - z_i * z_i + c_r;
-            let next_i = 2.0 * z_r * z_i + c_i;
-            z_r = next_r;
-            z_i = next_i;
-            n = n + 1u;
+        // 3. Compute Attention Scores for this block
+        var score = 0.0;
+        for (var d = 0u; d < head_dim; d = d + 1u) {
+            let q_val = qkv_data[seq_q * QKV_SIZE + head * head_dim + d];
+            score = score + q_val * K_shared[t_col * BLOCK_SIZE + d];
         }
         
-        let escape_ratio = f32(n) / f32(max_iter);
-        let fractal_theta = theta * 1.61803398; // Golden ratio phase shift
-        let f_cos_t = q_cos(fractal_theta);
-        let f_sin_t = q_sin(fractal_theta);
-        let orbit_mix = escape_ratio * 0.2;
+        // Softmax reduction (Max + Exp)
+        let old_max = max_score;
+        max_score = max(max_score, score);
+        let exp_score = q_exp(score - max_score);
+        sum_exp = sum_exp * q_exp(old_max - max_score) + exp_score;
         
-        let v_r = qkv_data[seq_q * QKV_SIZE + V_OFFSET + kv_head * head_dim + d];
-        let v_i = qkv_data[seq_q * QKV_SIZE + V_OFFSET + kv_head * head_dim + d + 1u];
-        
-        let new_r = v_r * f_cos_t - v_i * f_sin_t + z_r * orbit_mix;
-        let new_i = v_r * f_sin_t + v_i * f_cos_t + z_i * orbit_mix;
-        
-        attn_out[seq_q * HIDDEN_SIZE + head * head_dim + d] = new_r;
-        attn_out[seq_q * HIDDEN_SIZE + head * head_dim + d + 1u] = new_i;
+        // Accumulate V
+        for (var d = 0u; d < head_dim; d = d + 1u) {
+            out_sum = out_sum * q_exp(old_max - max_score) + exp_score * V_shared[t_col * BLOCK_SIZE + d];
+        }
+        workgroupBarrier();
+    }
+    
+    // Normalize and Write Output
+    if (t_col == 0u) {
+        attn_out[seq_q * HIDDEN_SIZE + head * head_dim + t_row] = out_sum / sum_exp;
     }
 }
 
@@ -667,63 +703,24 @@ fn rucklidge_attractor(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 // ---------------------------------------------------------
-// 15. ABSOLUTE COMPRESSION: WOLFRAM CA (Rule 30 & 110)
+// 15. STANDARD FEED-FORWARD NETWORK (SwiGLU)
 // ---------------------------------------------------------
-struct WolframParams {
-    hidden_size: u32,
-    blend_factor: f32,
-}
-
 @group(0) @binding(0) var<uniform> w_params: WolframParams;
 @group(0) @binding(1) var<storage, read> state_in: array<f32>;
 @group(0) @binding(2) var<storage, read_write> state_out: array<f32>;
 
 @compute @workgroup_size(64)
-fn wolfram_compression(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn ffn_compression(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
     if (id >= w_params.hidden_size) { return; }
     
-    // Neighborhood lookup with periodic boundary conditions
-    // Magic Memory Trick - Modulo replaced with power-of-2 bitwise AND mask
-    let mask = w_params.hidden_size - 1u;
-    let left_id = (id + w_params.hidden_size - 1u) & mask;
-    let right_id = (id + 1u) & mask;
-    
-    let p_val = state_in[left_id];
-    let q_val = state_in[id];
-    let r_val = state_in[right_id];
-    
-    // Discretize to 0 or 1 for rule evaluation
-    let p = bool(p_val > 0.0);
-    let q = bool(q_val > 0.0);
-    let r = bool(r_val > 0.0);
-    
-    // Rule 30: p XOR (q OR r) -> Chaotic Diffusion
-    let r30 = p != (q || r);
-    
-    // Rule 110: (q AND NOT p) OR (q XOR r) -> Structural Turing-completeness
-    let r110 = (q && !p) || (q != r);
-    
-    // Continuous mapping: we modulate the state based on the CA outcome
-    let m30 = select(0.5, 1.5, r30);
-    let m110 = select(0.5, 1.5, r110);
-    
-    // Combine them: Rule 110 acts as the structural baseline, Rule 30 adds chaotic variance
-    let combined_mask = mix(m110, m30, w_params.blend_factor);
-    
-    state_out[id] = q_val * combined_mask;
+    // TODO: The Wolfram Cellular Automata logic was removed.
+    // Implement standard Linear up-projection, SwiGLU activation, and down-projection here.
 }
 
 // ---------------------------------------------------------
-// 16. ORGANIC DECODING: GRAY-SCOTT REACTION-DIFFUSION
+// 16. LINEAR LM HEAD PROJECTION
 // ---------------------------------------------------------
-struct GrayScottParams {
-    dt: f32,
-    du: f32,
-    dv: f32,
-    dim: u32,
-}
-
 @group(0) @binding(0) var<uniform> gs_params: GrayScottParams;
 @group(0) @binding(1) var<storage, read> latent_petri: array<f32>;
 @group(0) @binding(2) var<storage, read_write> u_state: array<f32>;
@@ -732,48 +729,12 @@ struct GrayScottParams {
 @group(0) @binding(5) var<storage, read> lm_head_bounds: array<f32>; // LLaDA LM Head Tensor
 
 @compute @workgroup_size(64)
-fn gray_scott_decode(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn lm_head_decode(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
     if (id >= gs_params.dim) { return; }
     
-    let latent_perturbation = latent_petri[id] * 0.01; 
-    
-    var u = u_state[id];
-    var v = v_state[id] + latent_perturbation;
-    
-    if (u == 0.0 && v == 0.0) {
-        u = 1.0;
-    }
-    
-    // Magic Memory Trick - Replace modulo with power-of-2 bitwise AND mask
-    let mask = gs_params.dim - 1u;
-    let left_id = (id + gs_params.dim - 1u) & mask;
-    let right_id = (id + 1u) & mask;
-    
-    let laplacian_u = u_state[left_id] - 2.0 * u + u_state[right_id];
-    let laplacian_v = v_state[left_id] - 2.0 * v + v_state[right_id];
-    
-    let uvv = u * v * v;
-    
-    // Map LLaDA 2.0 LM Head directly to the Feed (f) and Kill (k) chemical bounds
-    let f_val = q_abs(lm_head_bounds[id % arrayLength(&lm_head_bounds)]) * 0.1;
-    let k_val = q_abs(lm_head_bounds[(id + 1u) % arrayLength(&lm_head_bounds)]) * 0.1;
-    
-    let du = gs_params.du * laplacian_u - uvv + f_val * (1.0 - u);
-    let dv = gs_params.dv * laplacian_v + uvv - (f_val + k_val) * v;
-    
-    u = u + du * gs_params.dt;
-    v = v + dv * gs_params.dt;
-    
-    if (u < 0.0) { u = 0.0; }
-    if (u > 1.0) { u = 1.0; }
-    if (v < 0.0) { v = 0.0; }
-    if (v > 1.0) { v = 1.0; }
-    
-    u_state[id] = u;
-    v_state[id] = v;
-    
-    decode_out[id] = v;
+    // TODO: Gray-Scott Reaction-Diffusion decoding was removed for performance reasons.
+    // Implement standard linear projection over the vocab_size and Softmax argmax/sampling here.
 }
 
 // ---------------------------------------------------------

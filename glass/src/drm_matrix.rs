@@ -144,12 +144,12 @@ impl HolographicManifold {
         let mode_size = display_mode.size();
         let size_u32 = (mode_size.0 as u32, mode_size.1 as u32);
         
-        let mut db0 = card.create_dumb_buffer(size_u32, rust_drm::buffer::DrmFourcc::Xrgb8888, 32)
+        let db0 = card.create_dumb_buffer(size_u32, rust_drm::buffer::DrmFourcc::Xrgb8888, 32)
             .map_err(|e| anyhow::anyhow!("Failed to create Dumb Buffer 0: {:?}", e))?;
         let fb0 = card.add_framebuffer(&db0, 24, 32)
             .map_err(|e| anyhow::anyhow!("Failed to create Framebuffer 0: {:?}", e))?;
             
-        let mut db1 = card.create_dumb_buffer(size_u32, rust_drm::buffer::DrmFourcc::Xrgb8888, 32)
+        let db1 = card.create_dumb_buffer(size_u32, rust_drm::buffer::DrmFourcc::Xrgb8888, 32)
             .map_err(|e| anyhow::anyhow!("Failed to create Dumb Buffer 1: {:?}", e))?;
         let fb1 = card.add_framebuffer(&db1, 24, 32)
             .map_err(|e| anyhow::anyhow!("Failed to create Framebuffer 1: {:?}", e))?;

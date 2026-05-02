@@ -1,4 +1,4 @@
-use prismatic_core::SynapticState;
+use prismatic_core::GlobalContext;
 use std::net::UdpSocket;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -74,7 +74,7 @@ pub fn spawn_biometric_mdns_spore(local_identity_key: [u8; 32]) {
     });
 }
 
-pub fn spawn_nebula_shadow_node(state: Arc<SynapticState>) {
+pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
     tracing::info!("Initializing Nebula Mesh Network Shadow Node...");
 
     // Generate local biometric identity key for the swarm
@@ -169,12 +169,12 @@ pub fn spawn_nebula_shadow_node(state: Arc<SynapticState>) {
 
                 // Valid packet from Swarm
                 // 1. Carnot Thermodynamic Load Balancing
-                let local_heat = if let Ok(h) = _state_rx.hallucination_heat.try_lock() { (h[0]+h[1]+h[2])/3.0 } else { 0.1 };
+                let local_heat = f32::from_bits(_state_rx.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
                 let efficiency = carnot_efficiency(foreign_heat, local_heat);
                 
                 if efficiency > 0.1 {
                     // 2. O(1) Nine-Point Circle Routing
-                    let local_cam = if let Ok(c) = _state_rx.camera_pos.try_lock() { *c } else { [0.0, 0.0, 0.0] };
+                    let local_cam = *_state_rx.camera_pos.lock().unwrap();
                     let absolute_truth_anchor = [0.0, 0.0, 0.0]; // The origin of the OS manifold
                     let barycentric_route = calculate_nine_point_barycentric(local_cam, foreign_cam, absolute_truth_anchor);
                     
@@ -185,12 +185,12 @@ pub fn spawn_nebula_shadow_node(state: Arc<SynapticState>) {
                     if payload_str.contains("RAFT_VOTE_REQ") {
                         if foreign_heat < local_heat {
                             tracing::info!("Raft Consensus: Voting for Leader [{}] (Thermodynamic Advantage: {:.2} < {:.2})", src, foreign_heat, local_heat);
-                            let _ = _state_rx.sandboxed_payloads.push(format!("RAFT_VOTE_ACK:{}|", src));
+                            let _ = _state_rx.sandboxed_payloads.push(format!("RAFT_VOTE_ACK:{}|", src).into_bytes());
                         }
                     }
 
                     // Push to the sandbox for Thermodynamic Filtering
-                    let _ = _state_rx.sandboxed_payloads.push(payload_str.to_string());
+                    let _ = _state_rx.sandboxed_payloads.push(payload_str.to_string().into_bytes());
                 } else {
                     tracing::debug!("Carnot Efficiency too low ({:.2}). Load balancer rejecting payload.", efficiency);
                 }
@@ -221,9 +221,7 @@ pub fn spawn_nebula_shadow_node(state: Arc<SynapticState>) {
                 let _ = write!(cursor, "CAM:{:.1},{:.1},{:.1}|", cam[0], cam[1], cam[2]);
             }
 
-            let avg_heat = if let Ok(heat) = state.hallucination_heat.try_lock() {
-                (heat[0] + heat[1] + heat[2]) / 3.0
-            } else { 0.0 };
+            let avg_heat = f32::from_bits(state.gpu_thermal_celsius.load(std::sync::atomic::Ordering::Relaxed));
 
             if avg_heat > 0.0 {
                 let _ = write!(cursor, "HEAT:{:.2}|", avg_heat);

@@ -13,3 +13,6 @@ raw-window-handle.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
 libseat = "0.2.4"
+
+[features]
+warm_gpu_context = []
