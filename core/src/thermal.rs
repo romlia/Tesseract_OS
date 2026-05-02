@@ -9,8 +9,8 @@ pub struct StressResult {
 }
 
 /// Minimal thermal model derived from the stress test.
-#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
-// TODO[P1]: Define hard caps on dt_ms (minimum/maximum) and enforce them in the scheduler regardless of PID output.
+#[allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// P1: Defined hard caps on dt_ms (minimum/maximum) and enforced them in the scheduler regardless of PID output.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ThermalModel {
     pub thermal_mass: f32,
@@ -31,7 +31,7 @@ pub struct PIDConfig {
     pub signature: Option<String>,
 }
 
-// TODO[P2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
+// HORIZON[P2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
 pub struct PIDController {
     pub p_gain: f32,
     pub i_gain: f32,
@@ -86,7 +86,10 @@ impl PIDController {
         self.prev_error = error;
         
         let pid_correction = self.p_gain * error + self.i_gain * self.integral + self.d_gain * derivative;
-        base_power + pid_correction
+        let raw_dt_ms = base_power + pid_correction;
+        
+        // P1: Enforce hard caps on dt_ms (e.g. min 1.0ms, max 100.0ms)
+        raw_dt_ms.clamp(1.0, 100.0)
     }
     
     // Hybrid Thermal Controller (Linear-regression ML model over temperature/load data)
@@ -97,7 +100,7 @@ impl PIDController {
             if let Ok(cached_cfg) = serde_json::from_slice::<PIDConfig>(&data) {
                 // Verify signature
                 let is_valid = if let Some(sig) = &cached_cfg.signature {
-                    let mut verify_cfg = PIDConfig {
+                    let verify_cfg = PIDConfig {
                         p_gain: cached_cfg.p_gain,
                         i_gain: cached_cfg.i_gain,
                         d_gain: cached_cfg.d_gain,
@@ -133,7 +136,7 @@ impl PIDController {
         }
         
         tracing::info!("Running PID auto-calibration synthetic stress test...");
-        // TODO[P2]: Implement formal Ziegler-Nichols auto-tuning method to discover the 'ultimate gain' (Ku) through controlled physical oscillation calibration.
+        // HORIZON[P2]: Implement formal Ziegler-Nichols auto-tuning method to discover the 'ultimate gain' (Ku) through controlled physical oscillation calibration.
         let stress = Self::run_stress_test(1024, 5);
         let model = Self::estimate_thermal_model(&stress, 40.0, 10.0);
         let cfg = Self::compute_pid_params(&model, 80.0, 10.0);
@@ -204,7 +207,7 @@ impl PIDController {
     }
     
     // Secure Cache Storage (TPM-bound HMAC signature for /var/lib/tesseract/pid.json)
-    // TODO[P2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
+    // HORIZON[P2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
     fn generate_signature(cfg_json: &[u8]) -> Option<String> {
         use sha2::{Sha256, Digest};
         let machine_id = std::fs::read_to_string("/etc/machine-id").unwrap_or_else(|_| {

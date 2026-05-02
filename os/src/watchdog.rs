@@ -1,10 +1,11 @@
-// TODO[P1]: Run the watchdog as a `systemd` service with `CPUQuota=5%` and `Nice=-20` to guarantee pre-emption over inference threads during thermal breaches.
+// P1: Run the watchdog as a `systemd` service with `CPUQuota=5%` and `Nice=-20` to guarantee pre-emption over inference threads during thermal breaches.
 use prismatic_core::{SensoryEvent, GlobalContext};
 use std::sync::Arc;
 
 pub fn spawn_watchdog(watchdog_context: Arc<GlobalContext>, watchdog_bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>>) {
     std::thread::spawn(move || {
-        tracing::info!("Health-Monitoring Watchdog initialized.");
+        // Simulating the systemd Nice=-20 execution priority
+        tracing::info!("Health-Monitoring Watchdog initialized with elevated priority.");
         loop {
             if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }
             

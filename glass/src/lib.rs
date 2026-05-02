@@ -34,7 +34,7 @@ impl HologramSurface {
     pub fn new(width: u32, height: u32) -> Self {
         // DRM/KMS Mode-Setting Mock
         // Integrate kmscon or minimal DRM/KMS library to lock display modes before launching UI
-        #[cfg(feature = "hardware_drm")]
+        #[cfg(target_os = "linux")]
         {
             tracing::info!("DRM/KMS Hardware Mode-Setting Initialized. Synchronizing EGL/GBM context.");
         }

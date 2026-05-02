@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
-// TODO[P2]: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
-// TODO[P2]: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes.
+// HORIZON[P2]: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
+// HORIZON[P2]: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes.
 use prismatic_core::GlobalContext;
 use std::net::UdpSocket;
 use std::sync::Arc;
@@ -102,7 +102,7 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
     // Receiver Loop (The Cognitive Membrane & Mirror Dimension)
     
     // BFT Consensus Roadmap (Tendermint/HotStuff)
-    // TODO[P2]: Integrate BFT consensus directly into the lock-free kernel event bus to replace the simple gossip layer.
+    // HORIZON[P2]: Integrate BFT consensus directly into the lock-free kernel event bus to replace the simple gossip layer.
     pub struct BftNode {
         pub active: bool,
         pub current_view: u64,

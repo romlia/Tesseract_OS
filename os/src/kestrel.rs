@@ -245,8 +245,8 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
         };
 
         let mut pseudo_seed = 12345u32;
-        let mut prev_left_mass = 0.0;
-        let mut prev_right_mass = 0.0;
+        let prev_left_mass = 0.0;
+        let prev_right_mass = 0.0;
 
         loop {
             if prismatic_core::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) { break; }

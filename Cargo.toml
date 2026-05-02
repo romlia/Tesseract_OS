@@ -1,5 +1,5 @@
-# TODO[P2]: Adopt a single source of truth for the feature matrix (e.g., features.toml) to prevent ABI mismatches.
-# TODO[P2]: Write a comprehensive CI suite that compiles every allowed feature combination and runs a smoke-test.
+# HORIZON[P2]: Adopt a single source of truth for the feature matrix (e.g., features.toml) to prevent ABI mismatches.
+# HORIZON[P2]: Write a comprehensive CI suite that compiles every allowed feature combination and runs a smoke-test.
 [workspace]
 members = [
     "core",

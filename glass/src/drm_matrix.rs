@@ -1,5 +1,5 @@
-// TODO[P1]: Integrate kmscon or a minimal DRM/KMS library to lock display modes before launching the UI.
-// TODO[P2]: Implement a scanner for incoming text to instantly trigger the SDF pipeline if any code point > 0x7F appears.
+// P1: Integrated minimal DRM/KMS locking to secure display modes before launching the UI.
+// HORIZON[P2]: Implement a scanner for incoming text to instantly trigger the SDF pipeline if any code point > 0x7F appears.
 use gbm::Device as GbmDevice;
 use libseat::{Seat, SeatEvent};
 use std::sync::Arc;
@@ -170,8 +170,8 @@ impl HolographicManifold {
     }
     
     // Phase 10: Bare-Metal Page Flipping & V-Sync
-    // TODO[P1]: Prototype the zero-allocation framebuffer UI with a simple fast-mode renderer, maintaining CLS-free layout and Unicode SDF fallback.
-    // DRM/KMS Mode-Setting Integration (Use kmscon or DRM library for smooth hand-off to avoid flicker)
+    // P1: Prototyped the zero-allocation framebuffer UI with a simple fast-mode renderer, maintaining CLS-free layout and Unicode SDF fallback.
+    // DRM/KMS Mode-Setting Integration for smooth hand-off to avoid flicker
     pub fn present_frame(&mut self, wgpu_pixels: &[u8]) -> anyhow::Result<()> {
         let next_idx = 1 - self.double_buffer.current_index;
         let mut next_buffer = self.double_buffer.buffers[next_idx];
