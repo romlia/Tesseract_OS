@@ -1,4 +1,7 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P2]: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
+// TODO[P2]: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
+// TODO[P1]: Expose a secure syscall (`sys_verify_life`) that smart contracts can invoke to enforce real-time, entropy-based presence checks.
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use uinput::Device;

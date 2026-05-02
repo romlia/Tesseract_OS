@@ -29,6 +29,7 @@ pub struct PIDConfig {
     pub signature: Option<String>,
 }
 
+// TODO[P2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
 pub struct PIDController {
     pub p_gain: f32,
     pub i_gain: f32,

@@ -1,4 +1,5 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P2]: Build a unified `/dev/membrane` character device. Any data crossing from Private to Public sphere must be written to this device.
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use prismatic_core::GlobalContext;

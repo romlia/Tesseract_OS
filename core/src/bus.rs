@@ -11,6 +11,7 @@ pub enum BackpressurePolicy {
     Block,
 }
 
+// TODO[P3]: Encapsulate the crossbeam queue, back-pressure policy, and epoch handling into a unified Rust trait.
 pub trait EventBus<T>: Send + Sync {
     fn push(&self, event: T) -> Result<(), QueueFull>;
     fn pop(&self) -> Option<T>;
@@ -47,6 +48,7 @@ impl LockFreeEventBus {
     }
 }
 
+// TODO[P2]: Add a runtime monitor that logs queue depth and triggers a 'slow-path' when depth exceeds 80% capacity.
 pub struct QueueDepthMonitor<'a, T> {
     bus: &'a dyn EventBus<T>,
     threshold_percent: usize,

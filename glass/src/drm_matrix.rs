@@ -1,3 +1,5 @@
+// TODO[P1]: Integrate kmscon or a minimal DRM/KMS library to lock display modes before launching the UI.
+// TODO[P2]: Implement a scanner for incoming text to instantly trigger the SDF pipeline if any code point > 0x7F appears.
 use gbm::Device as GbmDevice;
 use libseat::{Seat, SeatEvent};
 use std::sync::Arc;

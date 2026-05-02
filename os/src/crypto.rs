@@ -1,4 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P1]: Add a monotonically increasing `payload_seq` to every signed message to mitigate Replay Attacks.
+// TODO[P2]: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
 //! Cryptographic Layer (Refactored for Production Prototype)
 //! Replaces experimental AES-NI abuse with industry-standard primitives.
 

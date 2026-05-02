@@ -1,4 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P3]: Compute a temperature-based pitch factor and feed it through an Exponential Moving Average (EMA) to avoid abrupt, "robotic" pitch changes.
+// TODO[P3]: Use a band-limited oscillator (e.g., wavetable) for the Chebyshev exciter to prevent aliasing at high pitches.
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use prismatic_core::{SensoryEvent, GlobalContext};
 use rtrb::RingBuffer;

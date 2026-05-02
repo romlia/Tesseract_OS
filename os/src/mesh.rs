@@ -1,4 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
+// TODO[P2]: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
+// TODO[P2]: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes.
 use prismatic_core::GlobalContext;
 use std::net::UdpSocket;
 use std::sync::Arc;

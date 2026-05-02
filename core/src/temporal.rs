@@ -126,6 +126,7 @@ pub fn run_continuous_loop(
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates 
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
     // TODO[P2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
+    // TODO[P2]: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
     pub struct TimelineManager {
         pub active_branch: String,
         // Represents an LSM tree where keys are timestamps and values are state vectors.
@@ -160,7 +161,9 @@ pub fn run_continuous_loop(
 
     // WGPU Setup
     // ShaderFactory Abstraction (Dynamic loading of 128-bit SIMD vs scalar WGSL modules)
+    // TODO[P1]: Compile both SIMD and scalar WGSL modules and register them under a common entry point in a ShaderFactory.
     // Diagnostic Socket (Add /var/run/tesseract/shader.sock to return active shader variant and GPU properties)
+    // TODO[P2]: Add /var/run/tesseract/shader.sock to return the active shader variant and GPU properties for fleet telemetry.
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance
         .request_adapter(&wgpu::RequestAdapterOptions::default()))

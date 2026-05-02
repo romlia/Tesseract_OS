@@ -1,3 +1,4 @@
+// TODO[P1]: Run the watchdog as a `systemd` service with `CPUQuota=5%` and `Nice=-20` to guarantee pre-emption over inference threads during thermal breaches.
 use prismatic_core::{SensoryEvent, GlobalContext};
 use std::sync::Arc;
 
