@@ -204,6 +204,7 @@ impl PIDController {
     }
     
     // Secure Cache Storage (TPM-bound HMAC signature for /var/lib/tesseract/pid.json)
+    // TODO[P2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
     fn generate_signature(cfg_json: &[u8]) -> Option<String> {
         use sha2::{Sha256, Digest};
         let machine_id = std::fs::read_to_string("/etc/machine-id").unwrap_or_else(|_| {
