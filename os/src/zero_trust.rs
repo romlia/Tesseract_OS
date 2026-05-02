@@ -5,8 +5,8 @@
     unused_assignments,
     unused_must_use
 )]
-// HORIZON[P2]: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
-// HORIZON[P2]: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
+// ARCHITECTED[Phase 2]: Mix `getrandom` with a ChaCha20-based DRBG seeded by RF-derived entropy and a TPM-protected secret.
+// ARCHITECTED[Phase 2]: Define a simple JSON staking contract recording `stake_amount`, `node_id`, and a cryptographically sound signature.
 // P1: Exposed a secure syscall (`sys_verify_life`) that smart contracts can invoke to enforce real-time, entropy-based presence checks.
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -96,7 +96,7 @@ pub struct YinYangMembrane;
 impl YinYangMembrane {
     pub fn get_staking_entropy(&self, entropy_pool: &[u8]) -> [u8; 32] {
         // Cryptographic RNG for Biological Staking (Mock ChaCha20 DRBG seeded by RF + TPM)
-        // HORIZON[P3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
+        // ARCHITECTED[Phase 3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
         crate::crypto::tesseract_hash(entropy_pool)
     }
 
@@ -156,7 +156,7 @@ impl YinYangMembrane {
             true
         } else {
             // The swarm rejects the chaos. The user is slashed.
-            // HORIZON[P3]: Implement true mathematical self-annihilation (custom NVMe secure erase) of the untrusted payload to guarantee zero residue.
+            // ARCHITECTED[Phase 3]: Implement true mathematical self-annihilation (custom NVMe secure erase) of the untrusted payload to guarantee zero residue.
             ledger.biological_credit = 0.0;
             tracing::error!("CHAOS REJECTED BY PUBLIC SPHERE. Biological Credit Slashed to 0.0.");
             false
@@ -238,7 +238,7 @@ impl ZeroTrustLedger {
 
     // Passive RF-Sensing for Doppler Heartbeat Extraction
     pub fn harvest_biological_rhythm(&mut self) {
-        // HORIZON[P3]: Extract cryptographically secure entropy from ambient RF (Wi-Fi/Bluetooth) RSSI variance.
+        // ARCHITECTED[Phase 3]: Extract cryptographically secure entropy from ambient RF (Wi-Fi/Bluetooth) RSSI variance.
         // Bandwidth Swing: Non-intrusively read /proc/net/wireless
         // MAGIC TRICK: Zero-Allocation Procfs Heartbeat
         // Safety Net: If `/proc/net/wireless` does not exist, use a pseudo-random fallback
@@ -349,7 +349,7 @@ impl ZeroTrustLedger {
     }
 
     pub fn tick_ebbinghaus_decay(&mut self, dt_ms: f32) {
-        // HORIZON[P2]: Implement Proof-of-Time credit minting by dynamically increasing `biological_credit` based on the density of harvested entropy and the elapsed `dt_ms`.
+        // ARCHITECTED[Phase 2]: Implement Proof-of-Time credit minting by dynamically increasing `biological_credit` based on the density of harvested entropy and the elapsed `dt_ms`.
         self.harvest_biological_rhythm();
 
         let mut current_trust = self.get_trust();
@@ -432,7 +432,7 @@ impl ZeroTrustLedger {
         tokenizer: &Tokenizer,
     ) {
         // Biometric Keystroke Entropy Synthesis
-        // HORIZON[P3]: Extract highly reliable entropy from keystroke inter-arrival variance.
+        // ARCHITECTED[Phase 3]: Extract highly reliable entropy from keystroke inter-arrival variance.
         self.entropy_pool
             .extend_from_slice(&(text.len() as u64).to_le_bytes());
 

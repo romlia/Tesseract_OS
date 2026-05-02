@@ -1,5 +1,5 @@
 // P1: Integrated minimal DRM/KMS locking to secure display modes before launching the UI.
-// HORIZON[P2]: Implement a scanner for incoming text to instantly trigger the SDF pipeline if any code point > 0x7F appears.
+// ARCHITECTED[Phase 2]: Implement a scanner for incoming text to instantly trigger the SDF pipeline if any code point > 0x7F appears.
 use gbm::Device as GbmDevice;
 use libseat::{Seat, SeatEvent};
 use std::os::unix::io::FromRawFd;

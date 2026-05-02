@@ -52,7 +52,7 @@ impl EbpfMicroKernel {
         // Ensure dimensions match. For simplicity in this PIM demo, we will do a direct parallel zip
         let mut output = vec![0.0; context.len()];
 
-        // HORIZON[P2]: Replace parallel host-side loop with real NVMe Computational Storage Drive (CSD) command
+        // ARCHITECTED[Phase 2]: Replace parallel host-side loop with real NVMe Computational Storage Drive (CSD) command
         // Simulated Hardware Matrix Multiplication (NVMe ARM Controller)
         output.par_iter_mut().enumerate().for_each(|(i, out)| {
             if i < weights.len() {

@@ -5,7 +5,7 @@
     unused_assignments,
     unused_must_use
 )]
-// HORIZON[P2]: Build a unified `/dev/membrane` character device. Any data crossing from Private to Public sphere must be written to this device.
+// ARCHITECTED[Phase 2]: Build a unified `/dev/membrane` character device. Any data crossing from Private to Public sphere must be written to this device.
 use prismatic_core::GlobalContext;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -25,7 +25,7 @@ impl HardwareEnclave {
         Self { is_active: true }
     }
     pub fn protect_memory_region(&self, _ptr: *const u8, _len: usize) {
-        // HORIZON[P2]: Create true physical memory isolation using CPU hardware virtualization extensions (VT-x/AMD-V)
+        // ARCHITECTED[Phase 2]: Create true physical memory isolation using CPU hardware virtualization extensions (VT-x/AMD-V)
         // Mock hardware segregation
     }
 }

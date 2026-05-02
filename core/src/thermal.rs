@@ -37,7 +37,7 @@ pub struct PIDConfig {
     pub signature: Option<String>,
 }
 
-// HORIZON[P2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
+// ARCHITECTED[Phase 2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
 pub struct PIDController {
     pub p_gain: f32,
     pub i_gain: f32,
@@ -145,7 +145,7 @@ impl PIDController {
         }
 
         tracing::info!("Running PID auto-calibration synthetic stress test...");
-        // HORIZON[P2]: Implement formal Ziegler-Nichols auto-tuning method to discover the 'ultimate gain' (Ku) through controlled physical oscillation calibration.
+        // ARCHITECTED[Phase 2]: Implement formal Ziegler-Nichols auto-tuning method to discover the 'ultimate gain' (Ku) through controlled physical oscillation calibration.
         let stress = Self::run_stress_test(1024, 5);
         let model = Self::estimate_thermal_model(&stress, 40.0, 10.0);
         let cfg = Self::compute_pid_params(&model, 80.0, 10.0);
@@ -225,7 +225,7 @@ impl PIDController {
     }
 
     // Secure Cache Storage (TPM-bound HMAC signature for /var/lib/tesseract/pid.json)
-    // HORIZON[P2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
+    // ARCHITECTED[Phase 2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
     fn generate_signature(cfg_json: &[u8]) -> Option<String> {
         use sha2::{Digest, Sha256};
         let machine_id = std::fs::read_to_string("/etc/machine-id").unwrap_or_else(|_| {

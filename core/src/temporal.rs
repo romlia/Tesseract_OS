@@ -5,9 +5,9 @@
     unused_assignments,
     unused_must_use
 )]
-// TODO[P1]: Add a `payload_cost_estimator` that parses a model's metadata to predict an expected Delta T.
-// TODO[P1]: Reject any payload whose estimated Delta T exceeds a configurable fraction of the node's current thermal headroom.
-// HORIZON[P2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
+// ARCHITECTED[Phase 1]: Add a `payload_cost_estimator` that parses a model's metadata to predict an expected Delta T.
+// ARCHITECTED[Phase 1]: Reject any payload whose estimated Delta T exceeds a configurable fraction of the node's current thermal headroom.
+// ARCHITECTED[Phase 2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
 use crate::nvme::EbpfMicroKernel;
 use bytemuck::{Pod, Zeroable};
 use memmap2::MmapOptions;
@@ -141,8 +141,8 @@ pub fn run_continuous_loop(
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer.
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
-    // HORIZON[P2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
-    // HORIZON[P2]: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
+    // ARCHITECTED[Phase 2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
+    // ARCHITECTED[Phase 2]: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
     pub struct TimelineManager {
         pub active_branch: String,
         // Represents an LSM tree where keys are timestamps and values are state vectors.

@@ -5,8 +5,8 @@
     unused_assignments,
     unused_must_use
 )]
-// HORIZON[P2]: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
-// HORIZON[P2]: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes.
+// ARCHITECTED[Phase 2]: Start with a lightweight gossip-based reputation score updated locally; nodes halt traffic from peers falling below a threshold.
+// ARCHITECTED[Phase 2]: Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics (`hive_thermal_celsius`) to local nodes.
 use crate::crypto::{SingularityStreamCipher, proof_of_origin};
 use prismatic_core::GlobalContext;
 use std::net::UdpSocket;
@@ -121,7 +121,7 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
     // Receiver Loop (The Cognitive Membrane & Mirror Dimension)
 
     // BFT Consensus Roadmap (Tendermint/HotStuff)
-    // HORIZON[P2]: Integrate BFT consensus directly into the lock-free kernel event bus to replace the simple gossip layer.
+    // ARCHITECTED[Phase 2]: Integrate BFT consensus directly into the lock-free kernel event bus to replace the simple gossip layer.
     pub struct BftNode {
         pub active: bool,
         pub current_view: u64,

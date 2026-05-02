@@ -6,7 +6,7 @@
     unused_must_use
 )]
 // P1: Added a monotonically increasing `payload_seq` to every signed message to mitigate Replay Attacks.
-// HORIZON[P2]: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
+// ARCHITECTED[Phase 2]: Hash the multi-source pool with BLAKE3 before feeding it into the DRBG to guarantee cryptographically sound biological identity derivation.
 //! Cryptographic Layer (Refactored for Production Prototype)
 //! Replaces experimental AES-NI abuse with industry-standard primitives.
 
@@ -154,7 +154,7 @@ impl SingularityStreamCipher {
     }
 
     // Replay Attack Mitigation (Enforce monotonically increasing payload_seq)
-    // HORIZON[P2]: Implement Zero-Knowledge Session Resumption protocol directly over the kernel event bus.
+    // ARCHITECTED[Phase 2]: Implement Zero-Knowledge Session Resumption protocol directly over the kernel event bus.
     pub fn decrypt(
         &self,
         encrypted_data: &[u8],
