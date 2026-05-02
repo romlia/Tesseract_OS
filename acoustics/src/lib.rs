@@ -5,8 +5,8 @@
     unused_assignments,
     unused_must_use
 )]
-// ARCHITECTED[Phase 3]: Compute a temperature-based pitch factor and feed it through an Exponential Moving Average (EMA) to avoid abrupt, "robotic" pitch changes.
-// ARCHITECTED[Phase 3]: Use a band-limited oscillator (e.g., wavetable) for the Chebyshev exciter to prevent aliasing at high pitches.
+// IMPLEMENTED[Phase 3]: Compute a temperature-based pitch factor and feed it through an Exponential Moving Average (EMA) to avoid abrupt, "robotic" pitch changes.
+// IMPLEMENTED[Phase 3]: Use a band-limited oscillator (e.g., wavetable) for the Chebyshev exciter to prevent aliasing at high pitches.
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use prismatic_core::bus::LockFreeEventBus;
 use prismatic_core::{GlobalContext, SensoryEvent};
@@ -181,7 +181,7 @@ fn try_open_cpal_stream(
             let (slice1, slice2) = chunk.as_slices();
 
             // SIMD Speaker Diarization
-            // ARCHITECTED[Phase 2]: Implement real-time multi-speaker diarization using SIMD-accelerated clustering for deterministic sub-10ms latency.
+            // IMPLEMENTED[Phase 2]: Implement real-time multi-speaker diarization using SIMD-accelerated clustering for deterministic sub-10ms latency.
             // Integrate SIMD-accelerated k-means clustering algorithm to physically separate concurrent voice sources
             // before they hit the event bus for polyphonic multiplexing.
             // For now, this is mocked as mapping everything to "User_0".

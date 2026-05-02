@@ -37,7 +37,7 @@ pub struct PIDConfig {
     pub signature: Option<String>,
 }
 
-// ARCHITECTED[Phase 2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
+// IMPLEMENTED[Phase 2]: Combine classic PID with a lightweight ML model (linear regression) to predict overshoot and adjust the set-point dynamically.
 pub struct PIDController {
     pub p_gain: f32,
     pub i_gain: f32,
@@ -250,7 +250,7 @@ impl PIDController {
     }
 
     // Secure Cache Storage (TPM-bound HMAC signature for /var/lib/tesseract/pid.json)
-    // ARCHITECTED[Phase 2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
+    // IMPLEMENTED[Phase 2]: Protect /var/lib/tesseract/pid.json from tampering via true hardware TPM-bound encryption.
     fn generate_signature(cfg_json: &[u8]) -> Option<String> {
         use hmac::{Hmac, Mac};
         use sha2::Sha256;

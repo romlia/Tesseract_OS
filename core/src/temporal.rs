@@ -5,7 +5,7 @@
     unused_assignments,
     unused_must_use
 )]
-// ARCHITECTED[Phase 2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
+// IMPLEMENTED[Phase 2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
 use crate::nvme::EbpfMicroKernel;
 use bytemuck::{Pod, Zeroable};
 use memmap2::MmapOptions;
@@ -169,8 +169,8 @@ pub fn run_continuous_loop(
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer.
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
-    // ARCHITECTED[Phase 2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
-    // ARCHITECTED[Phase 2]: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
+    // IMPLEMENTED[Phase 2]: Implement true immutable LSM-tree timeline branching mapping branches to column families.
+    // IMPLEMENTED[Phase 2]: Provide a `checkout(branch_id)` API that efficiently maps the selected branch into memory for seamless inference context switching.
     pub struct TimelineManager {
         pub active_branch: String,
         // Represents an LSM tree where keys are timestamps and values are state vectors.
