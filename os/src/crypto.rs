@@ -50,6 +50,7 @@ pub fn flush_nonce() {
 // MAGIC TRICK RETENTION: Use `blake3` crate. BLAKE3 inherently uses SIMD 
 // and AVX2/AVX-512 hardware intrinsics to achieve extreme speeds natively.
 // Multi-Source Entropy Pool & BLAKE3 (Aggregate RF/mic RMS/CPU jitter)
+// TODO[P4]: Research active signal-processing for extracting reliable cryptographic entropy from ambient RF/RSSI variance.
 pub fn tesseract_hash(data: &[u8]) -> [u8; 32] {
     #[cfg(feature = "crypto_pki")]
     {

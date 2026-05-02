@@ -3,6 +3,7 @@ use rayon::prelude::*;
 use std::fs::File;
 
 // LSM Tree Storage Engine (Integrates LSM system mapping Timeline branches to column families)
+// TODO[P3]: Map temporal timelines to column families using Immutable LSM-tree branching.
 pub struct EbpfMicroKernel {
     mmap: Mmap,
 }
@@ -17,6 +18,7 @@ impl EbpfMicroKernel {
 
     /// Simulates the eBPF Micro-Kernel executing a Dot Product on the NVMe Controller
     // TODO[P1]: Implement actual eBPF compiler backend to cross-compile WGSL to NVMe BPF bytecode and dispatch via nvme ioctl.
+    // TODO[P4]: Research custom computational-storage firmware since mainstream NVMe controllers do not support arbitrary eBPF kernels.
     /// In the Weight-Stationary paradigm, we pass the lightweight `context` across the PCIe bus,
     /// compute natively on the NAND flash, and return the result.
     pub fn execute_pim_offload(&self, expert_id: usize, context: &[f32], ebpf_bytecode_path: Option<&str>) -> std::io::Result<Vec<f32>> {

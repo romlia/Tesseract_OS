@@ -32,6 +32,7 @@ impl Html2Parser {
 
     // Zero-Allocation State Machine
     // Unicode-Detect Shim (Trap code points > 0x7F to instantly fall back to WebGPU SDF pipeline)
+    // TODO[P2]: Implement custom font atlas and GPU context management for Unicode SDF fallback maintaining zero allocations.
     // We return a custom `impl Iterator` or directly yield parsed `SemanticBlock<'a>` 
     // bound to the input lifetime `&'a str`, parsing raw gigabytes of HTML tokens with zero heap allocations.
     pub fn parse<'a>(&mut self, text: &'a str) -> Vec<SemanticBlock<'a>> {
