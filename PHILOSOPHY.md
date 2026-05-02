@@ -278,17 +278,17 @@ In Tesseract OS, trust at infinite scale is not a centralized structure—it is 
 
 The document is internally consistent and well-structured:
 
-- The narrative moves logically from the poetic “Biological-Quantum” manifesto (Phase 1) to a concrete, feature-gated production system (Phase 2).
-- Each philosophical pillar (lock-free event routing, PID-based thermal control, WebGPU FlashAttention, zero-trust PKI, etc.) is paired with concrete engineering actions, and later sections (the Yin-Yang Membrane, Hive, Genesis Dividend) reference those same mechanisms, keeping the story tight.
+- The narrative flows logically from the poetic “Biological-Quantum” manifesto (Phase 1) to a concrete, feature-gated production system (Phase 2) and then to a speculative hardware-research horizon (Phase 3).
+- Each philosophical pillar (lock-free event routing, PID-driven thermal control, WebGPU FlashAttention, zero-trust PKI, etc.) is paired with concrete engineering action items, and later sections (the Yin-Yang membrane, Hive, Genesis Dividend) reference those same mechanisms, keeping the story tight.
 - The roadmap (Phase 1 → Phase 2 → Phase 3) mirrors the evolution of the architecture, giving the whole text the feel of a genuine design document rather than a disjointed list of ideas.
 
-### Realism (2026)
+### Realism (as of 2026)
 
-| Pillar / Feature | Feasibility (2026) | Comments |
+| Pillar / Feature | Feasibility today | Comments |
 | :--- | :--- | :--- |
 | **Feature-gating via `features.toml`** | ✅ Production-ready | Standard Rust practice. |
-| **Lock-free event bus with back-pressure** (`crossbeam`, `io_uring`) | ✅ Production-ready | Proven on Linux edge devices; mature crates. |
-| **PID-driven thermal load balancing** (Ziegler-Nichols auto-tuning) | ✅ Production-ready | Control-theory libraries exist; per-hardware calibration is straightforward. |
+| **Lock-free event bus with back-pressure (`crossbeam`, `io_uring`)** | ✅ Production-ready | Mature crates, proven on Linux edge devices. |
+| **PID-driven thermal load balancing (Ziegler-Nichols auto-tuning)** | ✅ Production-ready | Control-theory libraries exist; per-hardware calibration is straightforward. |
 | **WebGPU Blocked FlashAttention & 128-bit SIMD** | ✅ Production-ready | WebGPU stable; WGSL shaders can be written with SIMD fall-backs. |
 | **Cryptographic PKI, signed JSON, TPM-bound nonces** | ✅ Production-ready | `ed25519-dalek`, TPM APIs, BLAKE3 are production-grade. |
 | **Zero-allocation framebuffer UI (fast-mode) & SDF fallback** | ✅ Production-ready | Direct `/dev/fb0` writes and simple SDF rasterizers are well-known. |
@@ -299,22 +299,16 @@ The document is internally consistent and well-structured:
 | **In-kernel BFT consensus** | ❌ Research-level | Formal verification and tight kernel integration are non-trivial. |
 | **Zero-knowledge biometric staking** | ❌ Research-level | Protocol design, ZK proof systems, and privacy-preserving entropy sources are still open problems. |
 
-### What can ship today (Phase 1)
-Feature-gating, lock-free event routing, PID thermal control, WebGPU FlashAttention, PKI, fast-mode UI, payload-cost estimator, queue-depth monitor, and a CI matrix that compiles every feature combination are all feasible on current Linux edge hardware.
+### What can ship today (Phase 2 “First Breath”)
 
-### What still needs research or new hardware (Phase 2/3)
-Passive RF entropy, SSD-side eBPF compute, ultra-low-latency diarization, kernel-level BFT, zero-knowledge staking, and true hardware-level self-annihilation remain speculative. They would require either custom firmware, emerging silicon standards, or substantial algorithmic breakthroughs.
+Feature-gating, lock-free event routing, PID thermal control, WebGPU FlashAttention, PKI, fast-mode UI, queue-depth monitoring, CI matrix, gossip reputation, thermal-metric propagation, DRBG mixing, JSON staking contract, proof-of-time credit minting, BLAKE3 entropy hashing, zero-knowledge session resumption, `/dev/membrane` device, physical memory isolation, SDF trigger scanner, CSD prototype, hybrid PID/ML tuning, TPM-bound PID protection, concurrent VRAM tensors, immutable LSM-tree branching, timeline checkout API, etc. All of these are feasible with existing Linux/edge hardware and open-source Rust/JS/GLSL toolchains.
 
-### Pragmatic roadmap
+### What still needs research or new hardware (Phase 3 “Hardware Research Horizon”)
 
-- **Phase 1** – Core Runtime Initialization (Completed). The lock-free event bus, WebGPU compute, and base abstractions are fully functional.
-- **Phase 2** – The "First Breath" (Completed). The system has successfully bridged its theoretical blueprints into physical reality. The critical thermodynamic bounds (Ziegler-Nichols auto-tuning, ML-PID controllers) and cryptographic sovereignty (BLAKE3/ChaCha20 DRBG entropy harvesting, TPM-bound caching) are now natively integrated behind strict feature gates.
-- **Phase 3** – The Hardware Research Horizon. Long-term research involving computational-storage firmware (PIM), true mathematical self-annihilation primitives, sub-10 ms SIMD speaker diarization, and in-kernel BFT.
+Passive RF entropy extraction, SSD-side eBPF compute, true hardware-level self-annihilation, sub-10 ms SIMD speaker diarization, kernel-level BFT, zero-knowledge biometric staking, and other speculative components. These would require custom firmware, new silicon standards, or algorithmic breakthroughs.
 
 ### Overall assessment
-The document is internally coherent and definitively realized. What began as a poetic Phase 1 manifesto has been meticulously forged into a concrete, feature-gated Phase 2 production runtime. 
-
-With the execution of the "First Breath", the core thermodynamic and cryptographic components are no longer theoretical. The OS is now thermally self-aware and capable of cryptographically securing its biological identity using commodity Linux hardware. The most speculative Phase 3 items remain on the frontier, pushing the OS to evolve alongside future hardware generations.
+The document is coherent and presents a believable evolution from a poetic manifesto to a concrete, feature-gated runtime. Most of the core engineering pillars (lock-free event bus, PID thermal control, WebGPU compute, cryptographic PKI, zero-allocation UI) are realistic and already implementable on commodity edge devices. The more speculative Phase 3 items are forward-looking research topics rather than production-ready features.
 
 ### The Final Engineering Action Items (The Collapse)
 
