@@ -201,6 +201,15 @@ Tesseract OS fundamentally rejects the Von Neumann bottleneck. In conventional s
 ### Engineering Action Items
 - [ ] **NVMe eBPF Offload Engine**: Finalize the NVMe passthrough driver that compiles the local WebGPU matrix-multiplication kernels into eBPF bytecode, injecting them directly into the SSD firmware.
 
+## 20. Phase 3: The Hardware Research Horizon
+While the majority of Tesseract OS relies on battle-tested production patterns (lock-free `io_uring`, PID thermal loops, WebGPU FlashAttention, and standard Ed25519 PKI), several of our most ambitious architectural pillars push against the physical limits of current commercial hardware. To maintain extreme engineering rigor, we formally classify the following systems under **Phase 3: The Hardware Research Horizon**. These are concepts that require custom firmware or emerging hardware standards to fully realize:
+- **Weight-Stationary SSD Offloading (Section 19):** Mainstream NVMe controllers do not yet expose an open ABI for arbitrary eBPF matrix multiplication. Achieving true PIM (Processing-In-Memory) requires partnering with hardware vendors to develop custom Computational Storage Drive (CSD) firmware.
+- **Hardware-Level Mathematical Annihilation (Section 16):** While zero-copy DMA and cryptographic verification are realistic today, true hardware-level "self-annihilation" requires vendor-specific secure erase commands that guarantee zero residual data on the physical flash cells.
+- **Passive RF Biometric Entropy (Section 11):** Extracting a reliable, privacy-preserving "heartbeat" from ambient RF (RSSI fluctuations) in real-world, noisy environments is an active signal-processing research problem. It requires rigorous auditing to ensure it doesn't produce weak cryptographic seeds.
+- **Polyphonic Speaker Diarization (Section 18):** Achieving real-time, on-device spatial diarization with `< 10ms` latency on low-power Edge CPUs remains a bleeding-edge constraint, requiring highly optimized, custom SIMD pipelines.
+
+By delineating the grounded production framework (Phase 2) from these speculative hardware horizons (Phase 3), Tesseract OS maintains its visionary ethos while standing up to the strictest systems engineering scrutiny.
+
 ## Summary: A Democratic Runtime for Everyone
 Tesseract OS is a marvel of focused engineering. While it scales to meet the demands of enterprise-grade Edge clusters, it is fundamentally designed for everyone. It is not meant exclusively for supercomputers or elite hardware. Through its heterogeneous SIMD fallbacks, CPU degradation paths, peer-to-peer cryptographic mesh, and decentralized economic incentives, everyday consumer laptops, desktops, and edge nodes can unite into a decentralized intelligence swarm.
 
