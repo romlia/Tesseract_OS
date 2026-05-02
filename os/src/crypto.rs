@@ -201,6 +201,7 @@ impl NodeTrustStore {
 
     #[cfg(feature = "crypto_pki")]
     pub fn verify_swarm_payload(&self, node_id: &str, payload: &[u8], signature_bytes: &[u8; 64]) -> bool {
+        // TODO[P1]: Ensure 'Incorruptibility of Justice' by formally validating Genesis Node public keys with zero administrative bypasses.
         if let Some(pub_key) = self.trusted_nodes.get(node_id) {
             let sig = Signature::from_bytes(signature_bytes);
             pub_key.verify(payload, &sig).is_ok()

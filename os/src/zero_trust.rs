@@ -90,6 +90,7 @@ impl YinYangMembrane {
         }
         
         // The Social Contract Operator ($\hat{S}$) Evaluation
+        // TODO[P1]: Enforce 'The Architect's Binding'—ensure the Social Contract Operator evaluates Genesis Node payloads with identical strictness to edge nodes.
         // We simulate the topological verification of the private_freewheel tensor
         let is_mathematically_sound = true; 
         
@@ -276,6 +277,7 @@ impl ZeroTrustLedger {
     }
 
     pub fn tick_ebbinghaus_decay(&mut self, dt_ms: f32) {
+        // TODO[P2]: Implement Proof-of-Time credit minting by dynamically increasing `biological_credit` based on the density of harvested entropy and the elapsed `dt_ms`.
         self.harvest_biological_rhythm();
         
         let mut current_trust = self.get_trust();
