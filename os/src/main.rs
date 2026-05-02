@@ -16,6 +16,7 @@ pub mod io_membrane;
 pub mod kestrel;
 pub mod mesh;
 pub mod pretext_layout;
+pub mod sysprep_debug;
 pub mod zero_trust;
 
 pub mod bare_metal;
@@ -30,6 +31,12 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|arg| arg == "--verify-sysprep") {
+        sysprep_debug::run_purity_audit();
+        return;
+    }
+
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
