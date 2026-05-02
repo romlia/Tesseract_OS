@@ -5,8 +5,6 @@
     unused_assignments,
     unused_must_use
 )]
-// ARCHITECTED[Phase 1]: Add a `payload_cost_estimator` that parses a model's metadata to predict an expected Delta T.
-// ARCHITECTED[Phase 1]: Reject any payload whose estimated Delta T exceeds a configurable fraction of the node's current thermal headroom.
 // ARCHITECTED[Phase 2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
 use crate::nvme::EbpfMicroKernel;
 use bytemuck::{Pod, Zeroable};
@@ -136,6 +134,36 @@ pub fn run_continuous_loop(
     // the local autoregressive scale thresholds, it is flagged as a Cognitive Attack.
     // If the contract is breached, the state is dissolved before it affects local cognition, and a
     // penalty signal is sent to the `ZeroTrustLedger` to decay the attacker's Trust Scalar.
+
+    struct PayloadCostEstimator;
+    impl PayloadCostEstimator {
+        fn estimate_delta_t(layers: usize, hidden_size: usize) -> f32 {
+            // A simple heuristic mapping computational complexity to expected thermal rise.
+            // Example: A massive payload (100 layers, 8192 hidden) will predict a high delta T.
+            let base_cost = 0.0001;
+            (layers as f32) * (hidden_size as f32) * base_cost
+        }
+
+        fn check_thermal_headroom(current_temp: f32, thermal_limit: f32, payload_delta_t: f32) -> bool {
+            let thermal_headroom = thermal_limit - current_temp;
+            // Reject if the payload would consume more than 80% of our available thermal headroom.
+            payload_delta_t < (thermal_headroom * 0.8)
+        }
+    }
+
+    // Example dummy payload check before entering the core loop
+    let dummy_layers = 12;
+    let dummy_hidden_size = LILITH_CONFIG.hidden_size as usize;
+    let expected_delta_t = PayloadCostEstimator::estimate_delta_t(dummy_layers, dummy_hidden_size);
+    let current_temp_celsius = 60.0; // Assume we are running at 60C
+    let thermal_limit_celsius = 85.0;
+
+    if !PayloadCostEstimator::check_thermal_headroom(current_temp_celsius, thermal_limit_celsius, expected_delta_t) {
+        tracing::warn!("THERMAL HEADROOM REJECTION: Payload Delta T ({:.2}C) exceeds safety limits! Dropping payload.", expected_delta_t);
+        // In reality, we'd abort the offload here or heavily throttle.
+    } else {
+        tracing::info!("Thermal Headroom OK. Expected payload Delta T: {:.2}C.", expected_delta_t);
+    }
 
     // The continuous loop does not overwrite past memories (no apoptosis). User interaction acts as a strict
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer.

@@ -95,9 +95,40 @@ pub struct YinYangMembrane;
 
 impl YinYangMembrane {
     pub fn get_staking_entropy(&self, entropy_pool: &[u8]) -> [u8; 32] {
-        // Cryptographic RNG for Biological Staking (Mock ChaCha20 DRBG seeded by RF + TPM)
-        // ARCHITECTED[Phase 3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
-        crate::crypto::tesseract_hash(entropy_pool)
+        // Cryptographic RNG for Biological Staking
+        #[cfg(feature = "crypto_pki")]
+        {
+            use chacha20poly1305::aead::{AeadCore, OsRng};
+            use rand_core::{RngCore, SeedableRng};
+            use chacha20::ChaCha20Rng;
+            
+            // 1. Get raw system entropy (TPM/urandom)
+            let mut system_entropy = [0u8; 32];
+            chacha20poly1305::aead::rand_core::RngCore::fill_bytes(&mut OsRng, &mut system_entropy);
+            
+            // 2. Hash the biological RF/mic pool
+            let biological_hash = crate::crypto::tesseract_hash(entropy_pool);
+            
+            // 3. Mix them to create the master seed
+            let mut mixed_seed = [0u8; 32];
+            for i in 0..32 {
+                mixed_seed[i] = system_entropy[i] ^ biological_hash[i];
+            }
+            
+            // 4. Instantiate ChaCha20 DRBG
+            let mut drbg = ChaCha20Rng::from_seed(mixed_seed);
+            
+            // 5. Generate the final staking entropy
+            let mut final_entropy = [0u8; 32];
+            rand_core::Rng::fill_bytes(&mut drbg, &mut final_entropy);
+            
+            // ARCHITECTED[Phase 3]: Implement true zero-knowledge biometric staking proofs for crossing the Yin-Yang membrane.
+            final_entropy
+        }
+        #[cfg(not(feature = "crypto_pki"))]
+        {
+            crate::crypto::tesseract_hash(entropy_pool)
+        }
     }
 
     pub fn merge_timelines(
