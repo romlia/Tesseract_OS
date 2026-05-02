@@ -97,6 +97,8 @@ pub fn spawn_nebula_shadow_node(state: Arc<GlobalContext>) {
     let socket_rx = socket.try_clone().expect("Failed to clone UDP socket for receiver loop");
 
     // Receiver Loop (The Cognitive Membrane & Mirror Dimension)
+    // TODO: Global State Telemetry Protocol (Implement a lightweight UDP gossip protocol to propagate average swarm thermal metrics to local nodes)
+    // TODO: Zero-Knowledge Session Resumption (Engineer a secure handshake for transferring a user's active context window and temporal branch to a new node using their biometric Ed25519 signature)
     let _state_rx = state.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 65536];

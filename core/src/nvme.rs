@@ -16,6 +16,7 @@ impl EbpfMicroKernel {
 
 
     /// Simulates the eBPF Micro-Kernel executing a Dot Product on the NVMe Controller
+    // TODO: NVMe eBPF Offload Engine (Compile local WebGPU matrix kernels into eBPF and inject into SSD firmware)
     /// In the Weight-Stationary paradigm, we pass the lightweight `context` across the PCIe bus,
     /// compute natively on the NAND flash, and return the result.
     pub fn execute_pim_offload(&self, expert_id: usize, context: &[f32]) -> std::io::Result<Vec<f32>> {

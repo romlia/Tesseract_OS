@@ -103,6 +103,7 @@ use crate::SensoryEvent;
 pub struct QueueFull;
 
 // TODO: Generic EventBus Trait (Unify crossbeam queue logic, epoch handling, per-stream back-pressure)
+// TODO: Queue Depth Monitor (Add runtime monitor that logs queue depth and triggers a slow-path when depth exceeds 80%)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BackpressurePolicy {
     DropOldest,
@@ -346,6 +347,7 @@ pub fn run_continuous_loop(
     // to infinity locally without penalty. The penalty/filtering ONLY occurs at the Mesh network boundary.
     
     // Before the router pushes the `TesseractState` to the Swarm, it checks the Ledger's `Compute Credits`.
+    // TODO: Smart Contract VM Integration (Embed a minimal deterministic WebAssembly runtime directly into the lock-free event bus)
     // If the user's credits have collapsed to the universal baseline, Swarm offloading is heavily 
     // throttled or disabled entirely, falling back to local-hardware execution only. 
     // This prevents unlimited leeching of the Mesh and ensures human time is priced fairly.
@@ -370,11 +372,13 @@ pub fn run_continuous_loop(
     // time vector (`dt`). The past footprint is frozen immutably in the NVMe ring buffer. 
     // If the system state fundamentally changes (e.g., resolving a new paradox), the Tesseract bifurcates 
     // space into a new Timeline branch, fusing the old past with the newly selected present and future.
+    // TODO: LSM Tree Branching (Use Log-Structured Merge tree mapping each timeline branch to a separate column family)
     // TODO: Timeline API (Expose `checkout(branch_id)` to swap inference memory contexts seamlessly)
     tracing::info!("Starting 4D Temporal Loop (60Hz target) with wgpu Compute Shaders...");
 
     // WGPU Setup
     // TODO: ShaderFactory Abstraction (Dynamic loading of 128-bit SIMD vs scalar WGSL modules)
+    // TODO: Diagnostic Socket (Add /var/run/tesseract/shader.sock to return active shader variant and GPU properties)
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance
         .request_adapter(&wgpu::RequestAdapterOptions::default()))

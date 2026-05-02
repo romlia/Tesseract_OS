@@ -110,6 +110,7 @@ impl PIDController {
     
     // [COMMERCIALIZATION TODO]: Auto-Tuning Calibration & Persistence
     // TODO: Hybrid Thermal Controller (Linear-regression ML model over temperature/load data)
+    // TODO: Safety Envelopes (Define hard caps on dt_ms and enforce them in the scheduler regardless of PID output)
     pub fn calibrate_on_boot() -> Self {
         // Attempt to load from cache
         if let Ok(data) = std::fs::read("/var/lib/tesseract/pid.json") {

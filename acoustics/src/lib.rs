@@ -159,6 +159,8 @@ fn try_open_cpal_stream(bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryE
             empty_cycles = 0;
             let (slice1, slice2) = chunk.as_slices();
 
+            // TODO: SIMD Speaker Diarization (Integrate SIMD-accelerated clustering algorithm into this audio ingestion thread to physically separate concurrent voice sources before they hit the event bus for polyphonic multiplexing)
+
             // Hardware SIMD Dot Product (AVX2-256)
             #[inline(always)]
             fn simd_sum_sq(slice: &[f32]) -> f32 {

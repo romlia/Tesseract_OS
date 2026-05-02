@@ -31,6 +31,7 @@ pub struct HologramSurface {
 
 impl HologramSurface {
     pub fn new(width: u32, height: u32) -> Self {
+        // TODO: DRM/KMS Mode-Setting (Integrate kmscon or minimal DRM/KMS library to lock display modes before launching UI, synchronize handoff to GPU via gbm/egl to avoid flicker)
         Self {
             surface_id: 0,
             width,
@@ -45,6 +46,7 @@ impl HologramSurface {
     }
     
     pub fn render_to_fb0(&mut self, glyph_buffer: &[u32]) {
+        // TODO: Unicode-Detect Shim (Implement a scanner for incoming text; instantly trigger the SDF pipeline if any code point > 0x7F appears)
         // [COMMERCIALIZATION TODO]: Latency Benchmarking
         // Wrap this framebuffer write in a high-resolution timer (e.g., `minstant` or `std::time::Instant`).
         // Log the p99 latency of casting and flushing to `/dev/fb0`. This metric is required 

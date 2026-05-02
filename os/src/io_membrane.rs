@@ -4,6 +4,8 @@ use prismatic_core::GlobalContext;
 
 /// The Cryptographic Virtual File System (VFS)
 /// Wraps all external drive reads in the Social Contract Operator and BloomFilter verification.
+// TODO: Memory Space Segregation (Enforce hardware-level memory isolation utilizing ARM TrustZone or Intel SGX between PrivateInferenceEngine and SwarmRouter)
+// TODO: Explicit Publish Gateway (Build a unified /dev/membrane character device. Data crossing from Private to Public sphere must be written here, triggering biometric prompt)
 pub struct CryptographicVfs {
     pub target_device: String,
 }

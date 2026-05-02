@@ -1,5 +1,6 @@
 [workspace]
 # TODO: Feature Matrix Consolidation (Adopt features.toml for build system parsing to prevent ABI mismatches)
+# TODO: Compatibility Test Suite (Write a comprehensive CI suite compiling every feature combination and running a smoke test)
 members = [
     "core",
     "acoustics",

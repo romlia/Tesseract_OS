@@ -65,6 +65,7 @@ impl Default for ZeroTrustLedger {
 
 // Phase 13: The Yin-Yang Membrane
 // TODO: Staking Contract Schema (JSON contract parsing for biological staking)
+// TODO: Cryptographic RNG for Biological Staking (Mix getrandom with ChaCha20 DRBG seeded by RF entropy and TPM)
 pub struct YinYangMembrane;
 
 impl YinYangMembrane {
@@ -132,6 +133,7 @@ impl ZeroTrustLedger {
             external_contacts: BloomFilter::new(),
             revocation_list: BloomFilter::new(),
             biological_rhythm: -50.0,
+            // TODO: Genesis Smart Contract (Apply logistic function to GenesisDividend credit accrual for Central Limit ceiling)
             compute_credits: 100.0,
             biological_credit: 100.0, // Phase 13: Initialize Yin-Yang Currency
         }
@@ -284,6 +286,8 @@ impl ZeroTrustLedger {
         self.pending_intent = None;
         self.uinput_dev = None; // Drop the device physically
     }
+
+    // TODO: Proof-of-Life Handshake API (Expose sys_verify_life syscall for smart contracts to enforce real-time entropy checks)
 
     fn dispatch(&mut self, intent: ExecutionIntent) {
         let Some(dev) = &mut self.uinput_dev else {
