@@ -43,8 +43,12 @@ pub struct RubiksTensor {
     // By invoking `core::arch::x86_64::_mm_prefetch`, we can explicitly instruct the CPU 
     // to load the next mathematical block into the L1 cache *before* the loop requests it,
     // essentially reaching 0ns memory read latency.
-    // TODO: Context-Swapping VRAM Allocator (Hold multiple user context tensors in VRAM to swap pointers per-batch for polyphonic multiplexing)
+    // essentially reaching 0ns memory read latency.
     pub blocks: Vec<Option<RubiksBlock>>,
+    
+    /// Context-Swapping VRAM Allocator
+    /// Holds multiple user context tensors in VRAM to swap pointers per-batch for polyphonic multiplexing
+    pub user_context_pointers: std::collections::HashMap<String, usize>,
 }
 
 impl RubiksTensor {
@@ -84,7 +88,7 @@ impl RubiksTensor {
             }
         }
         
-        Self { blocks }
+        Self { blocks, user_context_pointers: std::collections::HashMap::new() }
     }
 }
 

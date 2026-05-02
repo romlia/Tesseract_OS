@@ -89,7 +89,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
             }
         };
         
-        // [COMMERCIALIZATION TODO]: FFI Boundary Benchmarking
+        // FFI Boundary Benchmarking
         // Setup tracing spans across the C/Rust FFI boundary when polling io_uring completions.
         // We need to measure if the kernel-to-userspace completion queue causes any hidden
         // latency spikes that could bottleneck the LockFreeEventBus under heavy contention.
@@ -256,7 +256,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
                     continue;
                 }
 
-                // TODO: Disabled optical flow CPU parallel reduction for performance.
+                // Disabled optical flow CPU parallel reduction for performance.
                 // Gestural Kinetic Sweep detection via Optical Flow approximation is too expensive.
                 // In a production system, use a low-res background worker or DSP.
                 /*

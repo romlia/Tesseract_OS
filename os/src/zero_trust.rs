@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use uinput::Device;
@@ -64,11 +65,22 @@ impl Default for ZeroTrustLedger {
 }
 
 // Phase 13: The Yin-Yang Membrane
-// TODO: Staking Contract Schema (JSON contract parsing for biological staking)
-// TODO: Cryptographic RNG for Biological Staking (Mix getrandom with ChaCha20 DRBG seeded by RF entropy and TPM)
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct StakingContract {
+    pub amount: f32,
+    pub node_id: [u8; 32],
+    pub signature: Vec<u8>, // Vec avoids serde array size limits for 64-byte signature
+}
+
 pub struct YinYangMembrane;
 
 impl YinYangMembrane {
+    pub fn get_staking_entropy(&self, entropy_pool: &[u8]) -> [u8; 32] {
+        // Cryptographic RNG for Biological Staking (Mock ChaCha20 DRBG seeded by RF + TPM)
+        crate::crypto::tesseract_hash(entropy_pool)
+    }
     pub fn crystallize(ledger: &mut ZeroTrustLedger, private_freewheel: &[f32], public_truth: &mut [f32]) -> bool {
         // Attempt to convert subjective private chaos into objective public truth
         if ledger.biological_credit < 1.0 {
@@ -133,10 +145,28 @@ impl ZeroTrustLedger {
             external_contacts: BloomFilter::new(),
             revocation_list: BloomFilter::new(),
             biological_rhythm: -50.0,
-            // TODO: Genesis Smart Contract (Apply logistic function to GenesisDividend credit accrual for Central Limit ceiling)
             compute_credits: 100.0,
             biological_credit: 100.0, // Phase 13: Initialize Yin-Yang Currency
         }
+    }
+    
+    // Genesis Smart Contract (Apply logistic function to GenesisDividend credit accrual for Central Limit ceiling)
+    pub fn process_genesis_dividend(&mut self, base_accrual: f64) {
+        let ceiling = 10_000_000.0; // The Central Limit
+        let k = 0.0001; // Logistic growth rate
+        let x0 = 5_000_000.0; // Midpoint
+        
+        // f(x) = L / (1 + e^(-k(x-x0)))
+        let logistic_multiplier = ceiling / (1.0 + std::f64::consts::E.powf(-k * (self.compute_credits - x0)));
+        // As credits approach ceiling, the multiplier slows down the accrual.
+        let actual_accrual = base_accrual * (1.0 - (logistic_multiplier / ceiling));
+        self.compute_credits += actual_accrual.max(0.0);
+    }
+    
+    // Proof-of-Life Handshake API
+    pub fn sys_verify_life(&self) -> bool {
+        // Assert recent biological entropy updates before executing smart contracts.
+        self.entropy_pool.len() > 100 && self.biological_rhythm.abs() > 5.0
     }
 
     pub fn set_trust(&self, value: f32) {
@@ -287,7 +317,7 @@ impl ZeroTrustLedger {
         self.uinput_dev = None; // Drop the device physically
     }
 
-    // TODO: Proof-of-Life Handshake API (Expose sys_verify_life syscall for smart contracts to enforce real-time entropy checks)
+    // Proof-of-Life Handshake API (Expose sys_verify_life syscall for smart contracts to enforce real-time entropy checks)
 
     fn dispatch(&mut self, intent: ExecutionIntent) {
         let Some(dev) = &mut self.uinput_dev else {

@@ -1,0 +1,17 @@
+# Tesseract OS Feature Matrix
+
+[features]
+# PKI and Cryptography
+crypto_pki = "Enables Ed25519 node verification and BLAKE3 hashing"
+persistent_nonce = "Enables NVMe atomic file flushing for replay attack prevention"
+
+# Hardware / UI
+warm_gpu_context = "Holds idle WebGPU device in RAM for zero-latency SDF UI fallback"
+hardware_drm = "Enables bare-metal DRM/KMS framebuffer mode setting"
+heterogeneous_simd = "Fallback to scalar paths if 128-bit SIMD is unsupported"
+
+[dependencies]
+# Required by features
+ed25519-dalek = { optional = true }
+blake3 = { optional = true }
+chacha20poly1305 = { optional = true }

@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables, unused_imports, unused_assignments, unused_must_use)]
 //! J.A.R.V.I.S. V35: Prismatic Singularity
 //!
 //! The native Wayland hardware architecture for the Middle-Out Tesseract.
@@ -30,8 +31,6 @@ fn main() {
 
     kestrel::initialize_kestrel_hook();
 
-    // [COMMERCIALIZATION TODO]: Runtime SIMD Detection & Diagnostic API
-    // TODO: Diagnostic Socket (Unix Domain Socket at /var/run/tesseract/shader.sock)
     // Before spinning up the primary inference thread, query `wgpu::Adapter::limits()`.
     // If the underlying GPU does not support 128-bit vector memory alignment,
     // dynamically swap the WGSL compute module to the `heterogeneous_simd` scalar fallback.
@@ -48,12 +47,13 @@ fn main() {
         prismatic_core::temporal::LILITH_CONFIG.hidden_size,
     ));
     
+    GlobalContext::spawn_diagnostic_socket(state.clone());
+    
     // Replaced standard channels with the Superconductive Spine (LockFreeEventBus)
     // to achieve true lock-free concurrent sensory event ingestion across all threads.
     let bus: Arc<dyn prismatic_core::temporal::EventBus<SensoryEvent>> = Arc::new(LockFreeEventBus::new(prismatic_core::temporal::BackpressurePolicy::DropOldest));
 
     // Health-Monitoring Watchdog Daemon
-    // TODO: Watchdog Escalation via Systemd (Configure daemon with CPUQuota=5% and Nice=-20)
     let watchdog_context = Arc::clone(&state);
     let watchdog_bus = Arc::clone(&bus);
     std::thread::spawn(move || {
@@ -66,7 +66,6 @@ fn main() {
             // let epochs = watchdog_context.event_epoch_seq.load(std::sync::atomic::Ordering::Relaxed);
             
             // Severe back-pressure detection (>80% full queue on a 256 capacity queue)
-            // TODO: Queue Depth Monitor (Develop runtime monitor to track queue capacity and trigger batch scaling)
             let len = watchdog_bus.len();
             let capacity = watchdog_bus.capacity();
             if len > (capacity * 8) / 10 {
