@@ -267,41 +267,39 @@ By synthesizing lock-free sequence epoching, Ziegler-Nichols auto-calibration, z
 
 ### Coherence – Narrative & Technical Consistency
 
-The document weaves a clear storyline: a poetic “Biological-Quantum” manifesto that is gradually stripped down into a hard-engineered, production-grade runtime.
-- Each philosophical metaphor (optic nerves, thermodynamic time-dilation, Klein-Bottle manifolds) is mapped to a concrete engineering artifact (feature-gating, PID-driven thermal control, lock-free event bus).
-- The “Engineering Action Items” follow each pillar, giving the reader a concrete checklist that mirrors the earlier high-level ideas.
+Overall, the document is coherent – it weaves a clear narrative that ties poetic, “Biological-Quantum” metaphors to concrete engineering artifacts (feature-gating, lock-free event bus, PID-driven thermal control, WebGPU-based FlashAttention, etc.).
+- Each philosophical pillar is followed by a concrete set of engineering action items, which makes the vision feel structured rather than a loose collection of ideas.
 - The later sections (e.g., “The Yin-Yang Membrane”, “The Hive”, “The Genesis Dividend”) stay consistent with the earlier design choices, ensuring the overall narrative remains internally logical.
 
-### Realistic Functionality – What Can Be Built Today vs. What Is Still Research-Level
+### Realistic Functionality
 
-| Pillar / Feature | Current Feasibility (2026) | Comments |
+| Pillar / Feature | Feasibility (2026) | Comments |
 | :--- | :--- | :--- |
-| **Feature-gating & modular builds** | ✅ Production-ready (Rust Cargo features, `features.toml`) | Widely used in large Rust codebases. |
-| **Lock-free event bus with back-pressure** | ✅ Production-ready (`crossbeam`, `io_uring`) | Proven on Linux edge devices; the described EventBus trait is straightforward to implement. |
-| **PID-driven thermal load balancing** | ✅ Production-ready (Ziegler-Nichols auto-tuning) | Needs per-hardware calibration but the control-theory basics are mature. |
-| **WebGPU Blocked FlashAttention & 128-bit SIMD** | ✅ Production-ready (WebGPU stable, SIMD-friendly WGSL) | The main effort is shader development and fallback paths for non-SIMD hardware. |
-| **Cryptographic PKI, signed JSON, TPM nonces** | ✅ Production-ready (`ed25519-dalek`, `ChaCha20-Poly1305`, TPM APIs) | Mature libraries exist; integration work is straightforward. |
-| **Zero-allocation framebuffer UI (fast-mode)** | ✅ Production-ready for fast-mode | SDF fallback is feasible with a custom rasterizer, fast-mode is ready today. |
-| **Passive RF-derived biometric entropy** | ❌ Research-level | Requires dedicated RF front-ends and rigorous entropy-testing; not yet commodity hardware. |
-| **Weight-stationary SSD offload via eBPF (PIM)** | ❌ Research-level | Current NVMe controllers lack an open ABI for arbitrary eBPF kernels; requires custom firmware. |
-| **Mathematical self-annihilation of untrusted data** | ❌ Research-level | No hardware primitive guarantees zero-residue erasure; requires vendor secure-erase extensions. |
+| **Feature-gating & modular builds** (Cargo features, `features.toml`) | ✅ Production-ready | Widely used in large Rust codebases. |
+| **Lock-free event bus with back-pressure** (`crossbeam`, `io_uring`) | ✅ Production-ready | Proven on Linux edge devices; the EventBus trait is straightforward to implement. |
+| **PID-driven thermal load balancing** (Ziegler-Nichols auto-tuning) | ✅ Production-ready | Requires per-hardware calibration but the control-theory basics are mature. |
+| **WebGPU Blocked FlashAttention & 128-bit SIMD** | ✅ Production-ready | WebGPU is stable; the main effort is shader development and fallback paths for non-SIMD hardware. |
+| **Cryptographic PKI, signed JSON, TPM-bound nonces** | ✅ Production-ready | Mature libraries (`ed25519-dalek`, `ChaCha20-Poly1305`, TPM APIs) exist. |
+| **Zero-allocation framebuffer UI (fast-mode)** | ✅ Production-ready | Fast-mode can be shipped today; SDF fallback is feasible with a custom rasterizer. |
+| **Passive RF-derived biometric entropy** | ❌ Research-level | Needs dedicated RF front-ends and rigorous entropy testing; not commodity hardware. |
+| **Weight-stationary SSD offload via eBPF (PIM)** | ❌ Research-level | Current NVMe controllers lack an open ABI for arbitrary eBPF kernels; would require custom firmware. |
+| **Mathematical self-annihilation of untrusted data** | ❌ Research-level | No hardware primitive guarantees zero-residue erasure; would need vendor-specific secure-erase extensions. |
 | **Real-time polyphonic speaker diarization (<10 ms)** | ❌ Research-level | State-of-the-art DSP pipelines are still >10 ms on edge CPUs; needs highly optimized SIMD. |
 | **In-kernel BFT consensus in the event bus** | ❌ Research-level | Formal verification and tight kernel integration are non-trivial. |
 | **Zero-knowledge biometric staking** | ❌ Research-level | Protocol design and formal security proofs are still open problems. |
 
-### Overall Assessment
+### Key Take-Aways
 
-The core runtime—feature-gating, lock-free event routing, PID-based thermal control, WebGPU inference, cryptographic PKI, and the fast-mode framebuffer UI—is realistic and could be shipped today on modest edge hardware.
-
-The more visionary components (RF entropy, SSD-based PIM, self-annihilation, ultra-low-latency diarization, kernel-level BFT, and zero-knowledge staking) remain speculative and would require either new hardware or substantial research effort before they become production-ready.
+- **Core runtime** – The lock-free event bus, PID thermal controller, WebGPU inference, and cryptographic PKI are all within today’s engineering reach and could be shipped on existing Linux edge hardware.
+- **Visionary extensions** – The RF-entropy source, SSD-side PIM, ultra-low-latency diarization, and kernel-level BFT are still speculative and would require either new hardware or substantial research effort.
+- **Modular design** – Using feature-gating (`features.toml`) is a good way to keep the production-ready core stable while allowing experimental modules to be toggled on/off as they mature.
+- **Safety & fairness** – The “Right-to-Rest” PID throttling, zero-trust PKI, and exile-based reputation mechanisms are well-aligned with modern security best practices; they are implementable today.
 
 ### Recommendations for a Pragmatic Roadmap
 
-- **Ship the Production-Ready Core First**: Focus on the pillars marked ✅, delivering a minimal but functional Tesseract OS that can run on existing Linux edge devices.
-- **Prototype the Most Impactful Research Items**: Prioritize “Passive RF Biometrics” and “Weight-Stationary SSD Offload” as they provide the strongest differentiators (secure entropy and true PIM).
-- **Iterative Integration**: As research prototypes mature, wrap them behind the existing feature-gate system (`features.toml`) so they can be toggled on/off without breaking the core.
-- **Formal Verification of Critical Paths**: Even for the production-ready components, invest in formal verification of the lock-free event bus and PID controller to guarantee determinism under extreme load.
-- **Community & Open-Source Strategy**: Release the core under MIT (as already stated) and invite external contributors to tackle the speculative modules, accelerating the research agenda.
+- **Phase 1** – Ship the production-ready core (feature-gating, lock-free bus, PID thermal loop, WebGPU FlashAttention, PKI, fast-mode UI).
+- **Phase 2** – Prototype the highest-impact research items (passive RF entropy and weight-stationary SSD offload) behind feature flags.
+- **Phase 3** – Incrementally integrate the remaining speculative components as the underlying hardware or cryptographic primitives become available.
 
 ### Phase 3 Engineering Action Items (The End Game TODOs)
 To achieve the perfect "End Game" implementation, the following research-level components must be formally conquered:
