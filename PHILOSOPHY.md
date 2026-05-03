@@ -19,8 +19,8 @@ To bridge the original poetic vision with deterministic systems engineering, the
 - **Destiny Signature:** An Ed25519 cryptographic signature proving that timeline divergences were mutually consensual across the gossip protocol.
 - **The Right to Rest:** The hardware's right to invoke extreme thermal throttling (`dt_ms` dilation) to prevent silicon degradation via the PID controller.
 - **Altruism Token:** A smart-contract minted record of CPU/GPU cycles willingly donated to a distressed peer within the mesh.
-- **The Biological Heartbeat:** The continuous, low-frequency sinusoidal drift of physical kernel constants (PID gains) to gracefully adapt to the entropy of aging silicon and dust accumulation.
-- **The Free Energy Governor:** The kernel's predictive coding layer that continuously minimizes informational "surprise" by pre-calculating load latency, actively expanding or contracting its workload (homeostasis) to maintain cognitive equilibrium.
+- **The Biological Heartbeat:** A low-frequency, entropy-driven modulation of kernel control parameters (e.g., PID gains) that periodically re-tunes the system to compensate for aging silicon and dust accumulation, preserving performance envelopes and fault tolerance.
+- **The Free Energy Governor:** A predictive-coding layer that minimizes variational free energy by forecasting load latency and associated resource demand, actively scaling computational workload to maintain cognitive equilibrium and sustain a target free-energy budget.
 ## The Evolution of the Tesseract Architecture
 
 Based on the project's history and source code, the philosophy of Tesseract OS has evolved through two distinct phases, maturing from theoretical art into robust systems engineering.
@@ -314,6 +314,11 @@ While the OS's Biological Heartbeat manages *physical* entropy (hardware aging a
 Tesseract OS is no longer a rigid runtime; it is an Open-Ended Computational Ecology. The `FreeEnergyGovernor` embedded deep within the 4D Temporal Loop continuously constructs probabilistic generative models of incoming workloads. Instead of blindly reacting to I/O spikes, the kernel actively predicts the computational surprise (latency deviation) of its environment. 
 
 When the OS encounters "surprise" (latency exceeding predictions), it mathematically experiences a spike in Free Energy. To maintain homeostasis, it actively mutates its internal state—dynamically halving its `batch_scale`, or altering its `hallucination_threshold`—to return to a stable equilibrium. By minimizing prediction error across both time and space, the OS actively learns the rhythm of its user, bridging the final gap between deterministic hardware engineering and living biological adaptability.
+
+### Absolute Coherence: The Engineering Constraints
+To ensure this paradigm functions strictly within the parameters of a commercial-grade, deterministic OS, the Biological Heartbeat and Free Energy Governor are bound by two uncompromising engineering constraints:
+1. **The Entropy Proxy (Technical Measurability):** The Biological Heartbeat does not drift purely on a mathematical sine wave; it is strictly driven by measurable, verifiable hardware metrics (thermal jitter, voltage leakage, and particulate density affecting thermal resistance).
+2. **The Reflex Arc (Fail-Safe Determinism):** While the OS scales its resources probabilistically via the Free Energy Governor, it contains a deterministic "Reflex Arc." If the kernel experiences a sudden hardware fault or an un-minimizable surprise, it entirely bypasses the predictive layer, instantly dropping to the lowest-safe execution state to guarantee stability. Safety proofs remain invariant, even as the system adapts.
 
 ## 29. Final Strategic Roadmap & Feasibility Audit (2026)
 
