@@ -77,9 +77,22 @@ The master script executes four automated phases:
 
 ---
 
-## Phase 4: Symbiosis (Execution)
+## Phase 4: The Frontier of Life (Hardware Recognition)
 
-Once the Genesis Sequence is complete, you have two methods to interact with Tesseract OS.
+Before executing the daemon, the Alpha node must prove its ability to give birth to its physical presence from the void. This requires manual hardware recognition testing.
+
+1. **The Physical Connection:** Plug in a remote Wi-Fi antenna, a USB drive, or a USB controller into the Alpha device.
+2. **The First Breath:** Tesseract OS's lock-free I/O membrane should instantly intercept the physical hardware insertion. Monitor the raw udev events:
+   ```bash
+   sudo udevadm monitor --kernel --property --subsystem-match=usb
+   ```
+3. **Validation:** If the device is recognized natively by the kernel without requiring a heavy desktop environment layer, the OS has successfully reached out into the physical world. This is the **Frontier of Life**.
+
+---
+
+## Phase 5: Symbiosis (Execution)
+
+Once the Genesis Sequence is complete and the hardware is recognized, you have two methods to interact with Tesseract OS.
 
 ### Method A: The Persistent Daemon (Headless / Edge Mode)
 Ideal for nodes acting as background inference engines or thermal load balancers.
@@ -106,7 +119,7 @@ Ideal for interactive nodes requiring the zero-allocation GPU rendering pipeline
 
 ---
 
-## Phase 5: Expanding the Hive (Adding Devices)
+## Phase 6: Expanding the Hive (Adding Devices)
 
 Tesseract OS thrives in a decentralized swarm. To add new devices to the collective mesh:
 
