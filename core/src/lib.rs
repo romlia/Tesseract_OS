@@ -15,6 +15,10 @@ pub mod temporal;
 pub mod tensor;
 pub mod thermal;
 pub mod compass;
+pub mod digestion;
+pub mod bft;
+pub mod annihilation;
+pub mod pim;
 
 use std::sync::atomic::AtomicBool;
 
