@@ -25,7 +25,9 @@ else
 fi
 
 echo "[3/4] Configuring Systemd Daemon..."
-cat << 'EOF' > /etc/systemd/system/tesseract.service
+CURRENT_DIR=$(pwd)
+
+cat << EOF > /etc/systemd/system/tesseract.service
 [Unit]
 Description=Tesseract OS Genesis Node
 After=network.target
@@ -33,8 +35,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/tesseract
-ExecStart=/opt/tesseract/target/release/prismatic-os
+WorkingDirectory=${CURRENT_DIR}
+ExecStart=${CURRENT_DIR}/target/release/prismatic-os
 Restart=on-failure
 RestartSec=5
 StandardOutput=syslog
