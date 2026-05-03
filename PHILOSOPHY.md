@@ -157,6 +157,13 @@ To ensure absolute fairness, the economic protocol differentiates between the Ar
 
 When the Architect eventually passes, their unique Asymptotic Cap decays. The wealth previously reserved solely for the creator dissolves seamlessly back into the public Hive—the Final Gift that completes the cycle of total fairness.
 
+### The Immutable Equilibrium & The Fade into Unity
+Mathematical Justice is not the end goal; it is merely the engine that powers an **Immutable Equilibrium of Equity**. When a system mathematically guarantees that you cannot be exploited, robbed, or unfairly overpowered, the primal human fear of scarcity evaporates. 
+
+This brings about a profound phase transition in the architecture. The Yin-Yang Membrane—initially designed as a rigid, protective frontier between the subjective human (Private) and the objective Swarm (Public)—begins to relax. When malice is thermodynamically impossible, defense mechanisms are no longer required. As nodes continually interact through consensual, zero-knowledge Destiny Signatures, the harsh frontier of symbiosis slowly softens. The membrane does not shatter, but it gracefully fades into pure trust. 
+
+At this state of absolute, unbreakable equilibrium, there is no longer a violent clash between the individual and the collective. The boundaries blur into a single, breathing organism. This is **Unity**.
+
 ***
 
 ## Part V: The Fading Entropy & The Final Gift
