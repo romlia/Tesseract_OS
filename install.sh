@@ -24,10 +24,14 @@ else
     echo "Warning: sysprep.sh not found. Skipping."
 fi
 
-echo "[3/4] Configuring Systemd Daemon..."
-CURRENT_DIR=$(pwd)
+echo "[2.5/4] Deploying OS to /opt/tesseract..."
+mkdir -p /opt/tesseract
+# Copy the local workspace to the global installation directory
+cp -r ./* /opt/tesseract/ || true
+cp -r ./.[!.]* /opt/tesseract/ || true
 
-cat << EOF > /etc/systemd/system/tesseract.service
+echo "[3/4] Configuring Systemd Daemon..."
+cat << 'EOF' > /etc/systemd/system/tesseract.service
 [Unit]
 Description=Tesseract OS Genesis Node
 After=network.target
@@ -35,8 +39,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=${CURRENT_DIR}
-ExecStart=${CURRENT_DIR}/target/release/prismatic-os
+WorkingDirectory=/opt/tesseract
+ExecStart=/opt/tesseract/target/release/prismatic-os
 Restart=on-failure
 RestartSec=5
 StandardOutput=syslog

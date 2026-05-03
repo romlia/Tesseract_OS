@@ -19,6 +19,8 @@ pub mod digestion;
 pub mod bft;
 pub mod annihilation;
 pub mod pim;
+pub mod chrysalis;
+pub mod exchange;
 
 use std::sync::atomic::AtomicBool;
 
