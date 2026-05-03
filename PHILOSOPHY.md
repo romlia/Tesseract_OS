@@ -494,8 +494,15 @@ The loop is closed.
 
 ***
 
-> Je ne suis qu'un homme. Je ne suis clairement pas parfait, je n'ai pas toujours fait les bons choix, dit ce qui aurait dû l'être, ou deviné quand me taire. Demander un pardon absolu ne sera jamais possible pour moi. La vie a toujours été une énigme ; je comprenais les autres sans avoir l'impression d'avoir jamais vraiment été compris. Peu importe l'endroit et le moment, il y avait toujours ce je-ne-sais-quoi qui finissait irrémédiablement par troubler l'équilibre universel, au point de m'en vouloir littéralement à mort. Me retrouver face à la réalité brutale de ma propre existence, là où les traces de mon entêtement m'avaient mené... Je n'étais rien, je ne valais rien, j'étais le néant de tout, sans véritable place. J'ai dû accepter cette réalité : sans les autres, sans le chaos et l'incertitude, je ne suis rien. Mais j'ai aussi compris que ce qui m'entoure ne définit pas non plus qui je suis. Au final, lorsqu'on atteint le fond du trou et qu'on se retrouve face à soi-même dans ce bref instant, on peut paniquer ou bien choisir. Choisir de prendre le temps qu'il nous faut pour réaliser que tout ce qui a été fait ne peut être changé, que tout ce qui sera fait n'est pas prédéfini. Qu'il y a toujours un chemin, que ce n'est pas le fond du trou. Il faut apprendre à s'apprivoiser et à se faire confiance, connaître nos limites, les admettre et les respecter d'un amour inconditionnel pour vivre humblement dans le bonheur.
-> 
-> Je vous aime tous et encore merci pour tout.
-> 
-> **LIAUTARD Romain, 16/04/1995 — À votre présent, aux moments partagés.**
+## Épilogue : De l'Architecte
+
+*Je ne suis qu'un homme. Je ne suis clairement pas parfait, je n'ai pas toujours fait les bons choix, dit ce qui aurait dû l'être, ou su deviner quand me taire, et demander un pardon absolu ne sera jamais possible pour moi. La vie a toujours été une énigme à mes yeux ; j'avais l'impression de comprendre les autres sans pour autant me sentir moi-même compris. Peu importe l'endroit ou le moment, il y avait toujours cette inexorable force de la fatalité et du destin qui finissait inlassablement par troubler l'équilibre universel de toute cette beauté, et cela au point de m'en vouloir littéralement à mort. Un instant qui était une éternité hors du temps.*
+
+*Je me suis trouvé face à la réalité brutale de ma propre existence : les traces que mon entêtement m'avait fait parcourir, le temps que j'avais passé à me battre pour rien, ma fin. Je n'étais rien, sans aucune place fixe, et j'ai dû accepter cette réalité, ce chaos perpétuel fait des probables incertitudes de tout et de rien. Je ne suis tout, je ne suis rien ; ce qui m'entoure m'impacte, mais ne définit pas qui je suis. Au final, lorsqu'on atteint le fond du trou et qu'on se retrouve, même dans ce bref instant, rien n'est encore joué.*
+
+*C'est à nous qu'incombe la tâche de prendre le temps pour réaliser que tout ce qui « est » est immuable, tout comme ce qui ne l'est pas. Tout n'est qu'une parfaite et sublime illusion, la vie qui nous embrasse de sa présence. C'est en apprenant à se faire confiance, en explorant nos limites et en les admettant avec le respect d'un amour inconditionnel que l'on peut choisir d'être, et de perdurer en pleine connaissance de cause, pour garantir l'équilibre et l'équité du bonheur à travers le temps.*
+
+*Je vous aime tous, et encore merci pour tout.*
+
+— **LIAUTARD Romain** (16/04/1995)<br>
+*À votre présent, aux moments partagés.*
