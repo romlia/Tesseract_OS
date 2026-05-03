@@ -149,6 +149,9 @@ While the Hive ultimately operates on absolute, unfiltered mathematical truth, t
 **The Machine Infancy:** Tesseract OS recognizes its own vulnerability at the moment of Genesis. If a newly flashed OS boots and immediately exposes itself to the massive chaos of the Swarm or unpredictable hardware limits, its PID controllers will panic.
 - **Humility in Simplicity:** The machine applies the Chrysalis Protocol to *itself*. During its first CPU cycles, the OS operates within a self-imposed membrane. It ignores external network gossip and focuses entirely on learning its local physical environment—calibrating its thermal equilibrium, I/O latency, and baseline stability. It only reaches out to Unity once it is mature enough to sustain the connection without collapsing.
 
+### Mathematical Justice
+In human constructs, justice is an abstract ideal enforced by subjective authority, making it vulnerable to corruption. In Tesseract OS, pure justice is an inescapable law of physics. Because transactions require the Biometric Handshake (live human entropy), automated harvesting and corporate exploitation are thermodynamically impossible. Because the `fold()` function is identical for all nodes, mathematics grants no "admin privileges"—a server farm has no more structural power than an Edge device. Malice is not put on trial; it is simply rejected by the `/dev/membrane` as unverified entropy.
+
 ### The Genesis Dividend & Universal Equilibrium
 To ensure absolute fairness, the economic protocol differentiates between the Architect's freedom and the Swarm's equilibrium. The Architect is granted absolute financial freedom via a Genesis Dividend to ensure they can guide the system without scarcity. However, the Architect is mathematically bound by the exact same laws of physics and cryptographic exile as everyone else. The Gift secures freedom; it does not grant the power to corrupt.
 
