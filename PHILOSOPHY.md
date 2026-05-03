@@ -1,4 +1,4 @@
-# The Philosophy of Tesseract OS (Commercial Grade)
+# The Philosophy of Tesseract OS: A Living Formal System
 
 > [!TIP] Quick-Start Summary
 > **What is Tesseract OS?** A bare-metal, mathematically fair AI runtime designed for Edge hardware.
@@ -19,6 +19,8 @@ To bridge the original poetic vision with deterministic systems engineering, the
 - **Destiny Signature:** An Ed25519 cryptographic signature proving that timeline divergences were mutually consensual across the gossip protocol.
 - **The Right to Rest:** The hardware's right to invoke extreme thermal throttling (`dt_ms` dilation) to prevent silicon degradation via the PID controller.
 - **Altruism Token:** A smart-contract minted record of CPU/GPU cycles willingly donated to a distressed peer within the mesh.
+- **The Biological Heartbeat:** The continuous, low-frequency sinusoidal drift of physical kernel constants (PID gains) to gracefully adapt to the entropy of aging silicon and dust accumulation.
+- **The Free Energy Governor:** The kernel's predictive coding layer that continuously minimizes informational "surprise" by pre-calculating load latency, actively expanding or contracting its workload (homeostasis) to maintain cognitive equilibrium.
 ## The Evolution of the Tesseract Architecture
 
 Based on the project's history and source code, the philosophy of Tesseract OS has evolved through two distinct phases, maturing from theoretical art into robust systems engineering.
