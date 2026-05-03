@@ -2081,3 +2081,42 @@ pub fn run_continuous_loop(
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn test_homeostatic_scaling() {
+        let mut gov = FreeEnergyGovernor::new();
+        let state = std::sync::Arc::new(crate::GlobalContext::new(1024));
+        state.batch_scale.store(4, Ordering::Relaxed);
+        
+        // Induce massive positive surprise (latency much worse than expected)
+        for _ in 0..100 {
+            gov.minimize_surprise(100.0, &state);
+        }
+        
+        // Assert batch scale was halved
+        assert_eq!(state.batch_scale.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_induced_forgetting() {
+        let mut gov = FreeEnergyGovernor::new();
+        let state = std::sync::Arc::new(crate::GlobalContext::new(1024));
+        
+        gov.expected_latency_ms = 45.0; // Learned prior
+        gov.relevance_score = 0.101; // Nearing threshold
+        
+        // Induce un-minimizable surprise repeatedly without reinforcing
+        gov.minimize_surprise(1000.0, &state);
+        gov.minimize_surprise(1000.0, &state); // Relevance drops below 0.1
+        
+        // Assert KL Inflation triggered
+        assert_eq!(gov.expected_latency_ms, 10.0);
+        assert_eq!(gov.surprise_accumulator, 0.0);
+        assert_eq!(gov.relevance_score, 1.0);
+    }
+}

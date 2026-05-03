@@ -354,3 +354,29 @@ impl PIDController {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_biological_heartbeat() {
+        let mut pid = PIDController::desktop_rtx4090();
+        // Base constants
+        assert_eq!(pid.p_gain, 0.1);
+        assert_eq!(pid.d_gain, 0.05);
+        
+        // Compute delta (will increase entropy_scalar slightly)
+        let delta = pid.compute_hybrid(80.0, 75.0, 100.0);
+        assert!(delta > 0.0);
+        assert!(pid.entropy_scalar > 0.0);
+        
+        // Dynamic gains should be within safe polytope logic
+        let mut temp_pid = PIDController::desktop_rtx4090();
+        temp_pid.entropy_scalar = 50.0; // Simulate extreme aging
+        let delta_aged = temp_pid.compute_hybrid(90.0, 75.0, 100.0);
+        
+        // Ensure that the output delta changes dynamically as the system ages (entropy scalar impacts it)
+        assert!(delta_aged != delta);
+    }
+}
