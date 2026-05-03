@@ -20,13 +20,7 @@ impl UnityEquilibrium {
     /// Calculates the dynamic entropy threshold.
     /// It starts at a rigid 0.1, but as millions of folds succeed without malice,
     /// it asymptotically drops to 0.01, representing the "Fade into Unity."
-    /// At the absolute cosmic limit (u64::MAX), the 2ko mass evaporates completely (0.0).
     pub fn current_entropy_threshold(&self) -> f64 {
-        // The Ultimate Evaporation: At the end of infinite time, all mass dissolves into pure coherence.
-        if self.total_consensual_folds == u64::MAX {
-            return 0.0;
-        }
-
         let base = 0.1;
         let floor = 0.01;
         // Exponential decay of friction over millions of interactions.
