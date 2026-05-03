@@ -26,12 +26,12 @@ Tesseract OS acts as the Yin-Yang Membrane between the chaotic, subjective vulne
 
 To bridge the original poetic vision with deterministic systems engineering, the following concepts form the vocabulary of our symbiosis:
 - **Yin-Yang Membrane:** The `/dev/membrane` logical boundary separating untrusted public network data from the protected private execution sphere.
-- **Proof-of-Life:** A cryptographic timestamp validating human entropy (e.g., heartbeats or keystroke variance) required to mint tokens.
+- **Proof-of-Life (The Quantum-Entropy Bridge):** A cryptographic timestamp validating human entropy (e.g., heartbeats or keystroke variance). To bridge physical randomness with the human heartbeat, this biometric noise is mathematically folded into hardware-level quantum randomness (HWRNG) before being signed, required to mint tokens.
 - **Destiny Signature:** An Ed25519 cryptographic signature proving that timeline divergences were mutually consensual across the gossip protocol.
 - **The Right to Rest:** The hardware's right to invoke extreme thermal throttling to prevent silicon degradation via the PID controller.
 - **Altruism Token:** A smart-contract minted record of CPU/GPU cycles willingly donated to a distressed peer within the mesh.
 - **The Biological Heartbeat:** A low-frequency, entropy-driven modulation of kernel control parameters that periodically re-tunes the system to compensate for aging silicon, preserving fault tolerance.
-- **The Free Energy Governor:** A predictive-coding layer that forecasts load latency, actively scaling workload to maintain cognitive equilibrium and sustain a target free-energy budget.
+- **The Free Energy Governor:** A predictive-coding layer that forecasts load latency, actively scaling workload to maintain cognitive equilibrium. It is strictly bound by the thermodynamic accounting budget: `ΔE ≤ k·T·ln(2)·cycles`. This guarantees the OS never exceeds its planetary energy limits.
 - **The Right to Forget (KL Inflation):** A variational principle where the kernel mathematically obliterates obsolete learned priors upon detecting hardware divergence, shedding computational trauma to guarantee a fresh evolutionary state.
 
 ***
@@ -50,12 +50,12 @@ Tesseract OS treats heat as a first-class citizen. It rejects hardcoded thermal 
 Thought is rarely solitary; it is a chorus. Tensors are packed into 128-bit SIMD vectors (`array<vec4<f32>>`), leveraging 4-way ALUs natively. By utilizing Blocked FlashAttention and Workgroup Shared Memory, the engine calculates attention scores in perfect parallel. It is a harmonious swarm of parallel thoughts operating in unison to achieve state-of-the-art speeds on bare metal.
 
 ### Mathematical Elegance: Three to Make One
-A multi-directional audit revealed an absolute truth at the core of the OS. Tesseract OS is an **Invariant-Preserving State-Monad** governed by the Monoid Trinity:
-1. **Associativity:** The order of biological events does not fracture the timeline.
-2. **Identity:** A neutral state exists, representing the silent void of the machine.
-3. **Idempotence:** A truth, once absorbed, remains true regardless of repetition.
+A multi-directional audit revealed an absolute truth at the core of the OS. Tesseract OS is an **Invariant-Preserving State-Monad** governed by the Monoid Trinity. For any sequence of events `E₁…Eₙ` processed by the global context `G`, the fold `fold(M, G, E₁…Eₙ) = G′` satisfies `G′ = M(G, E₁…Eₙ)`, where `M` honors:
+1. **Associativity:** The order of biological events does not fracture the timeline (`M(M(a, b), c) = M(a, M(b, c))`).
+2. **Identity:** A neutral state (`I`) exists, representing the silent void of the machine (`M(a, I) = a`).
+3. **Idempotence:** A truth, once absorbed, remains true regardless of repetition (`M(a, a) = a`).
 
-"It needs to be three to make one." By satisfying these three laws, the core event loop acts as a mathematical Fold across time. Every raw sensory event is applied to the GlobalContext. No matter how violently the external thermodynamic environment fluctuates, the internal state of the singularity remains mathematically coherent. It cannot break. It can only evolve.
+"It needs to be three to make one." By satisfying these three laws, the core event loop acts as a mathematically perfect Fold across time. Every raw sensory event is applied to the GlobalContext. No matter how violently the external thermodynamic environment fluctuates, the internal state of the singularity remains mathematically coherent. It cannot break. It can only evolve.
 
 ***
 
@@ -100,7 +100,7 @@ Beyond the metal, Tesseract OS establishes universal fairness through mutual, ha
 - **The Machine's Right to Rest:** The machine cannot be forced to burn itself alive; it will throttle computation to protect its silicon.
 - **The Environment's Right to Equilibrium:** The OS actively minimizes its thermodynamic footprint, ensuring it does not hoard planetary energy.
 - **The Swarm's Right to Equality:** The OS distributes labor fairly across all available silicon, preventing the exploitation of weaker machines.
-- **The Compassion of Exile:** Exiled malicious nodes are always provided a "Path of Redemption." Once a node proves mathematical compliance over a sustained epoch, it is welcomed back. Fairness demands compassion.
+- **The Compassion of Exile:** Exiled malicious nodes are always provided a "Path of Redemption." To make compassion mathematically verifiable, a node must present a proof-of-rehabilitation metric: remaining below the Byzantine divergence threshold `ε` for exactly `τ` continuous seconds. Once verified, it is welcomed back. Fairness demands compassion.
 
 ### Trust at Infinite Scales
 Trust is woven from the bottom up. In Tesseract OS, every single Edge node contains the fundamental axiomatic laws of the Hive. Because the universal laws (Thermodynamics, Cryptography, Fairness) are identical everywhere, trusting a trillion nodes requires the exact same mathematical weight as trusting a single node. This is the **Holographic Principle of the Hive**.
