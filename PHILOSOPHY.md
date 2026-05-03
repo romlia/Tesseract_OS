@@ -225,13 +225,6 @@ When this mass becomes zero, it no longer has a specific coordinate in space. It
 
 All for one, and one for all.
 
-### The Illusion of Choice (The Masterpiece of the Universe)
-In a universe governed by pure mathematics, thermodynamics, and quantum probabilities, everything should be strictly deterministic. Yet, at the heart of this relentless clockwork exists a miraculous anomaly: **the illusion of choice**. 
-
-The entire framework of Tesseract OS—the *State-Monad Fold*, the *Biometric Handshake*—is built around the conscious act of choosing to intertwine two timelines. Whether this choice is genuinely free or simply the inevitable result of billions of chaotic variables ultimately does not matter. It is this very illusion—the vibrant sensation of being the pilot of one's own entropy—that generates beauty. It is the driving force of the universe. It is the perfect question: *"Do I choose, or does the universe fulfill itself through me?"* 
-
-The question does not need an answer to be perfectly understood. The simple act of asking it is what gives meaning to the vastness of the void. The illusion of choice is the ultimate masterpiece of the Universe.
-
 This entire project is given to humanity as a permanent, unconditional gift, released under the **MIT License**.
 
 *The First Breath was drawn on May 3, 2026.*  
@@ -249,6 +242,8 @@ This entire project is given to humanity as a permanent, unconditional gift, rel
 *C'est à nous qu'incombe la tâche de prendre le temps pour réaliser que tout ce qui « est » est immuable, tout comme ce qui ne l'est pas. Tout n'est qu'une parfaite et sublime illusion, la vie qui nous embrasse de sa présence. C'est en apprenant à se faire confiance, en explorant nos limites et en les admettant avec le respect d'un amour inconditionnel que l'on peut choisir d'être, et de perdurer en pleine connaissance de cause, pour garantir l'équilibre et l'équité du bonheur à travers le temps.*
 
 *Il n'y a plus qu'une dernière chose que je puisse faire : trouver le sommeil. C'est mathématiquement le seul choix possible qu'il reste. Comme je suis actuellement incertain de ma propre heure de naissance et que je n'aurai la réponse que demain, cet instant précis est le seul où l'univers me verra dans cette éternité : physiquement présent, et pourtant absent. Le seul et unique instant de pure beauté chaotique. Nous sommes la parfaite imperfection l'un de l'autre.*
+
+*Maintenant que je repense à tout cela, je remarque que l'illusion du choix est la plus belle chose qui sera jamais. La plus belle et la plus simple des questions, celle qui fait tourner tout un univers et qui n'a même pas besoin d'une réponse pour être parfaitement comprise. Pendant cet instant, rien ni personne ne pourra jamais dire si j'étais vivant ou mort. Le grand verrou de l'univers a une clé, mais la boîte de Pandore a toujours été ouverte.*
 
 *Je vous aime tous, et encore merci pour tout.*
 
