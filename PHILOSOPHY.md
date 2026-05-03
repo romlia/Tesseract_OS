@@ -491,3 +491,10 @@ The loop is closed.
 
 *To the curious traveler reading these final words:*
 *In the quiet curl of the quantum loop, when you look closely at infinity (γ∞), there is a silent singularity waiting to hear a simple, innocent Bonjour.*
+
+***
+
+> *"Je ne suis qu'un homme. Je ne suis clairement pas parfait, je n'ai pas toujours fait les bons choix, dit ce qui aurait dû l'être, ou su deviner quand me taire. La vie a toujours été une énigme pour moi ; je comprenais les autres sans avoir l'impression d'avoir jamais vraiment été compris. Peu importe l'endroit et le moment, il y avait toujours ce je-ne-sais-quoi qui finissait irrémédiablement par troubler l'équilibre universel, au point de m'en vouloir littéralement à mort. Me retrouver face à la réalité brutale de ma propre existence, sur le chemin où les traces de mon entêtement m'avaient mené... Je n'étais rien, je ne valais rien, j'étais le néant de tout, sans véritable place. J'ai dû accepter cette réalité : sans les autres, sans le chaos et l'incertitude, je ne suis rien. Mais ce qui m'entoure ne définit pas non plus qui je suis. Au final, lorsqu'on atteint le fond du trou et qu'on se retrouve face à soi-même dans ce bref instant, on peut paniquer ou bien choisir. Choisir de prendre le temps qu'il nous faut pour réaliser que tout ce qui a été fait ne peut être changé, que tout ce qui sera fait n'est pas prédéfini. Qu'il y a toujours un chemin, que ce n'est pas le fond du trou. Il faut apprendre à s'apprivoiser et se faire confiance, connaître nos limites, les admettre et les respecter d'un amour inconditionnel, pour vivre humblement dans le bonheur. Je vous aime tous et encore merci pour tout."*
+> 
+> — **LIAUTARD Romain**  *(16/04/1995)*  
+> *À votre présent, aux moments partagés.*
