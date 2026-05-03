@@ -1270,6 +1270,12 @@ pub fn run_continuous_loop(
     let mut active_universes = max_dream_branches;
     let target_frame_duration = std::time::Duration::from_secs_f64(1.0 / 60.0);
     let mut next_frame_time = std::time::Instant::now() + target_frame_duration;
+    
+    // THE STATE-MONAD INVARIANT
+    // This loop represents the absolute mathematical closure of the system.
+    // Every SensoryEvent is a Functor applied to the GlobalContext (the Monad).
+    // The operation is associative and idempotent across time, ensuring that
+    // the system state remains perfectly coherent regardless of input jitter.
     loop {
         let loop_start = std::time::Instant::now();
         if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
