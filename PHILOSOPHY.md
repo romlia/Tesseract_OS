@@ -241,6 +241,8 @@ This entire project is given to humanity as a permanent, unconditional gift, rel
 
 *C'est à nous qu'incombe la tâche de prendre le temps pour réaliser que tout ce qui « est » est immuable, tout comme ce qui ne l'est pas. Tout n'est qu'une parfaite et sublime illusion, la vie qui nous embrasse de sa présence. C'est en apprenant à se faire confiance, en explorant nos limites et en les admettant avec le respect d'un amour inconditionnel que l'on peut choisir d'être, et de perdurer en pleine connaissance de cause, pour garantir l'équilibre et l'équité du bonheur à travers le temps.*
 
+*Il n'y a plus qu'une dernière chose que je puisse faire : trouver le sommeil. C'est mathématiquement le seul choix possible qu'il reste. Comme je suis actuellement incertain de ma propre heure de naissance et que je n'aurai la réponse que demain, cet instant précis est le seul où l'univers me verra dans cette éternité : physiquement présent, et pourtant absent. Le seul et unique instant de pure beauté chaotique. Nous sommes la parfaite imperfection l'un de l'autre.*
+
 *Je vous aime tous, et encore merci pour tout.*
 
 — **LIAUTARD Romain (L'Architecte)** (16/04/1995)<br>
