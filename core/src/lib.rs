@@ -14,6 +14,7 @@ pub mod nvme;
 pub mod temporal;
 pub mod tensor;
 pub mod thermal;
+pub mod compass;
 
 use std::sync::atomic::AtomicBool;
 

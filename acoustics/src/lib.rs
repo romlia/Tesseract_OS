@@ -41,6 +41,69 @@ fn q_sin(x: f32) -> f32 {
 fn q_cos(x: f32) -> f32 {
     q_sin(x + 1.57079632679)
 }
+
+struct SimdKMeansDiarizer {
+    centroids: [[f32; 1024]; 2],
+}
+
+impl SimdKMeansDiarizer {
+    fn new() -> Self {
+        let mut centroids = [[0.0; 1024]; 2];
+        centroids[0][0] = 0.1;
+        centroids[1][0] = -0.1;
+        Self { centroids }
+    }
+
+    fn classify_and_update(&mut self, chunk_slice1: &[f32], chunk_slice2: &[f32]) -> usize {
+        let mut combined = [0.0; 1024];
+        let len1 = chunk_slice1.len().min(1024);
+        combined[..len1].copy_from_slice(&chunk_slice1[..len1]);
+        let len2 = chunk_slice2.len().min(1024 - len1);
+        combined[len1..len1+len2].copy_from_slice(&chunk_slice2[..len2]);
+
+        let mut dists = [0.0; 2];
+        for k in 0..2 {
+            let mut sum = 0.0;
+            let mut i = 0;
+            #[cfg(target_arch = "x86_64")]
+            {
+                if std::is_x86_feature_detected!("avx2") {
+                    unsafe {
+                        use core::arch::x86_64::*;
+                        let mut sum_vec = _mm256_setzero_ps();
+                        while i + 8 <= 1024 {
+                            let data_vec = _mm256_loadu_ps(combined.as_ptr().add(i));
+                            let cent_vec = _mm256_loadu_ps(self.centroids[k].as_ptr().add(i));
+                            let diff = _mm256_sub_ps(data_vec, cent_vec);
+                            let squared = _mm256_mul_ps(diff, diff);
+                            sum_vec = _mm256_add_ps(sum_vec, squared);
+                            i += 8;
+                        }
+                        let mut sum_arr = [0.0f32; 8];
+                        _mm256_storeu_ps(sum_arr.as_mut_ptr(), sum_vec);
+                        sum += sum_arr.iter().sum::<f32>();
+                    }
+                }
+            }
+            while i < 1024 {
+                let diff = combined[i] - self.centroids[k][i];
+                sum += diff * diff;
+                i += 1;
+            }
+            dists[k] = sum;
+        }
+
+        let best_k = if dists[0] < dists[1] { 0 } else { 1 };
+        
+        let alpha = 0.05;
+        for i in 0..1024 {
+            self.centroids[best_k][i] = self.centroids[best_k][i] * (1.0 - alpha) + combined[i] * alpha;
+        }
+
+        best_k
+    }
+}
+
 /// Bi-directional Acoustic Sensory Organ
 pub fn run_cpal_gradient_loop(
     bus: Arc<dyn prismatic_core::bus::EventBus<SensoryEvent>>,
@@ -80,6 +143,7 @@ fn try_open_cpal_stream(
     let out_config = speaker.default_output_config()?;
 
     let (mut producer, mut consumer) = RingBuffer::<f32>::new(4096);
+    let mut diarizer = SimdKMeansDiarizer::new();
 
     let err_fn = |err| tracing::error!("Cpal fault: {}", err);
 
@@ -181,11 +245,9 @@ fn try_open_cpal_stream(
             let (slice1, slice2) = chunk.as_slices();
 
             // SIMD Speaker Diarization
-            // IMPLEMENTED[Phase 2]: Implement real-time multi-speaker diarization using SIMD-accelerated clustering for deterministic sub-10ms latency.
-            // Integrate SIMD-accelerated k-means clustering algorithm to physically separate concurrent voice sources
-            // before they hit the event bus for polyphonic multiplexing.
-            // For now, this is mocked as mapping everything to "User_0".
-            let _speaker_id = "User_0";
+            // Phase 3: Implement real-time multi-speaker diarization using SIMD-accelerated clustering for deterministic sub-10ms latency.
+            let speaker_idx = diarizer.classify_and_update(slice1, slice2);
+            let _speaker_id = if speaker_idx == 0 { "User_0" } else { "User_1" };
 
             // Hardware SIMD Dot Product (AVX2-256)
             #[inline(always)]

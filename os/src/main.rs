@@ -18,6 +18,7 @@ pub mod mesh;
 pub mod pretext_layout;
 pub mod sysprep_debug;
 pub mod zero_trust;
+pub mod zk_staking;
 
 pub mod bare_metal;
 pub mod headless;
