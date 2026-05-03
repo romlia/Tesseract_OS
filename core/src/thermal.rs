@@ -47,6 +47,8 @@ pub struct PIDController {
     pub hysteresis_band: (f32, f32),
     pub ml_slope: f32,
     pub ml_intercept: f32,
+    pub entropy_scalar: f32,
+    pub start_time: std::time::Instant,
 }
 
 impl Default for PIDController {
@@ -66,6 +68,8 @@ impl PIDController {
             hysteresis_band: (78.0, 82.0),
             ml_slope: 0.1,
             ml_intercept: 5.0,
+            entropy_scalar: 0.0,
+            start_time: std::time::Instant::now(),
         }
     }
 
@@ -79,6 +83,8 @@ impl PIDController {
             hysteresis_band: (65.0, 75.0),
             ml_slope: 0.05,
             ml_intercept: 2.0,
+            entropy_scalar: 0.0,
+            start_time: std::time::Instant::now(),
         }
     }
 
@@ -91,8 +97,26 @@ impl PIDController {
         let derivative = error - self.prev_error;
         self.prev_error = error;
 
+        // Dynamic Entropy Heartbeat Integration
+        let uptime_sec = self.start_time.elapsed().as_secs_f32();
+        
+        // Biological heartbeat: low frequency sine wave oscillating over ~12 hours (43200 seconds)
+        let heartbeat = (uptime_sec / 43200.0 * std::f32::consts::TAU).sin();
+        
+        // Increment entropy based on thermal stress. High temps accelerate aging.
+        let stress_factor = (current_temp / 85.0).max(1.0);
+        self.entropy_scalar += 0.000001 * stress_factor * _dt;
+        
+        // Logistic drift modeling silicon degradation
+        let logistic_drift = 1.0 / (1.0 + (-self.entropy_scalar).exp());
+        
+        // Compute instantaneous living coefficients clamped within a Stability Polytope
+        let current_p = (self.p_gain + (0.02 * logistic_drift) + (0.005 * heartbeat)).max(0.01);
+        let current_i = (self.i_gain + (0.005 * logistic_drift) + (0.001 * heartbeat)).max(0.001);
+        let current_d = (self.d_gain + (0.01 * logistic_drift) + (0.002 * heartbeat)).max(0.005);
+
         let pid_correction =
-            self.p_gain * error + self.i_gain * self.integral + self.d_gain * derivative;
+            current_p * error + current_i * self.integral + current_d * derivative;
         let raw_dt_ms = base_power + pid_correction;
 
         // P1: Enforce hard caps on dt_ms (e.g. min 1.0ms, max 100.0ms)
@@ -135,6 +159,8 @@ impl PIDController {
                         hysteresis_band: (cached_cfg.hysteresis_low, cached_cfg.hysteresis_high),
                         ml_slope: cached_cfg.ml_slope,
                         ml_intercept: cached_cfg.ml_intercept,
+                        entropy_scalar: 0.0,
+                        start_time: std::time::Instant::now(),
                     };
                 } else {
                     tracing::warn!(
@@ -186,6 +212,8 @@ impl PIDController {
             hysteresis_band: (cfg.hysteresis_low, cfg.hysteresis_high),
             ml_slope: cfg.ml_slope,
             ml_intercept: cfg.ml_intercept,
+            entropy_scalar: 0.0,
+            start_time: std::time::Instant::now(),
         }
     }
 

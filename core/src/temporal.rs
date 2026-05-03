@@ -91,6 +91,62 @@ struct SpeculativeUniverse {
     norm_out_offset: u64,
 }
 
+/// The Free Energy Principle (Predictive Coding) Governor
+/// Minimizes "surprise" (informational entropy) by building probabilistic models
+/// of workload latency and dynamically morphing internal scheduling policies.
+pub struct FreeEnergyGovernor {
+    pub expected_latency_ms: f32,
+    pub surprise_accumulator: f32,
+    pub learning_rate: f32,
+}
+
+impl FreeEnergyGovernor {
+    pub fn new() -> Self {
+        Self {
+            expected_latency_ms: 10.0, // Initial baseline prediction
+            surprise_accumulator: 0.0,
+            learning_rate: 0.05,
+        }
+    }
+
+    /// Measures prediction error (surprise) and minimizes Free Energy
+    pub fn minimize_surprise(&mut self, actual_latency: f32, state: &crate::GlobalContext) {
+        // Calculate surprise (prediction error)
+        let surprise = actual_latency - self.expected_latency_ms;
+        self.surprise_accumulator += surprise.abs() * 0.1;
+
+        // Active Inference: Update internal generative model
+        self.expected_latency_ms += surprise * self.learning_rate;
+
+        // Homeostatic Regulation: If surprise is consistently high, mutate behavior
+        if self.surprise_accumulator > 50.0 {
+            let current_scale = state.batch_scale.load(std::sync::atomic::Ordering::Relaxed);
+            if surprise > 0.0 && current_scale > 1 {
+                // Latency is worse than expected -> Reduce load to minimize future surprise
+                state.batch_scale.store(current_scale / 2, std::sync::atomic::Ordering::Release);
+                tracing::info!(
+                    "[FREE ENERGY] High Surprise ({}ms). Adapting homeostasis: Batch Scale -> {}",
+                    surprise,
+                    current_scale / 2
+                );
+            } else if surprise < 0.0 && current_scale < 8 {
+                // Latency is better than expected -> Increase load safely
+                state.batch_scale.store(current_scale * 2, std::sync::atomic::Ordering::Release);
+                tracing::info!(
+                    "[FREE ENERGY] Negative Surprise ({}ms). Expanding homeostasis: Batch Scale -> {}",
+                    surprise,
+                    current_scale * 2
+                );
+            }
+            // Bleed off accumulator after mutation
+            self.surprise_accumulator = 0.0;
+        } else {
+            // Natural entropy decay
+            self.surprise_accumulator *= 0.95;
+        }
+    }
+}
+
 pub fn run_continuous_loop(
     bus: std::sync::Arc<dyn crate::temporal::EventBus<crate::SensoryEvent>>,
     state: std::sync::Arc<crate::GlobalContext>,
@@ -206,6 +262,7 @@ pub fn run_continuous_loop(
         }
     }
     let mut _timeline = TimelineManager::new();
+    let mut free_energy_gov = FreeEnergyGovernor::new();
     tracing::info!("Starting 4D Temporal Loop (60Hz target) with wgpu Compute Shaders...");
 
     // WGPU Setup
@@ -1192,6 +1249,7 @@ pub fn run_continuous_loop(
     let target_frame_duration = std::time::Duration::from_secs_f64(1.0 / 60.0);
     let mut next_frame_time = std::time::Instant::now() + target_frame_duration;
     loop {
+        let loop_start = std::time::Instant::now();
         if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
@@ -1892,6 +1950,18 @@ pub fn run_continuous_loop(
                 state
                     .audio_oscillator_hz
                     .store(avg_freq.to_bits(), Ordering::Relaxed);
+
+                // Update execution latency and Free Energy prediction
+                let loop_dt = loop_start.elapsed().as_millis() as f32;
+                state
+                    .inference_latency_ms
+                    .store(loop_dt.to_bits(), Ordering::Relaxed);
+
+                free_energy_gov.minimize_surprise(loop_dt, &state);
+
+                // Advance Time
+                // The temporal flow dictates reality state evaluation rate
+                let target_frame_ms = 1000.0 / 60.0; // 60Hz tick target
 
                 // Final unmasking commitment
                 context_anchor

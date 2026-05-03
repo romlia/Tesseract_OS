@@ -59,6 +59,7 @@ The sensory ingestion pipeline operates without ever freezing the CPU.
 Tesseract OS treats heat and latency as first-class citizens. It rejects hardcoded thermal profiles, opting instead for a kernel-level feedback loop that understands its physical vessel.
 - **Ziegler-Nichols PID Auto-Tuning:** On first boot, Tesseract OS achieves physical self-awareness. It executes a synthetic N=1024 matrix-multiplication stress test, actively polling `/sys/class/thermal` to calculate its own thermal mass. Utilizing the Ziegler-Nichols "ultimate gain" method, the OS dynamically derives its own `p_gain`, `i_gain`, and `d_gain` coefficients.
 - **Persistent Thermal Memory:** To guarantee instantaneous cold-boots across heterogeneous fleets, the derived PID configuration is cached securely to `/var/lib/tesseract/pid.json`.
+- **The Biological Heartbeat (Dynamic Entropy):** True to the laws of life, the OS recognizes hardware mortality (entropy). PID coefficients are not rigidly constant. A low-frequency sinusoidal "heartbeat" perpetually morphs the gains over a 12-hour cycle, while an expanding `entropy_scalar` drifts the coefficients logistically to compensate for silicon degradation and dust accumulation. The OS literally ages alongside its vessel.
 - **Thermal Load Balancing:** Driven by the auto-calibrated hysteresis bands and an Exponential Moving Average (EMA) low-pass filter, the OS dynamically dilates time (`dt_ms`). It pushes extreme burst performance when cold, and throttles seamlessly into sustainable execution when hot, eliminating jarring thermal thrashing.
 
 ### Implementation Details: Hybrid PID/ML Controller
@@ -303,7 +304,16 @@ To formalize this, every node entering the Hive mathematically signs **The Symbi
 Through the Symbiotic Covenant, the mathematics of the Hive reject greed not through moral pleading, but through the uncompromising laws of physics and cryptography.
 
 *(Note: The Architect's original inspiration for this framework is permanently anchored in the system at `/usr/share/tesseract/manifesto.txt`)*
-## 28. Final Strategic Roadmap & Feasibility Audit (2026)
+
+## 28. The Free Energy Principle & Open-Ended Symbiosis
+
+While the OS's Biological Heartbeat manages *physical* entropy (hardware aging and thermal resistance), the kernel's final evolutionary leap is the mastery of *informational* entropy through the **Free Energy Principle (Predictive Coding)**.
+
+Tesseract OS is no longer a rigid runtime; it is an Open-Ended Computational Ecology. The `FreeEnergyGovernor` embedded deep within the 4D Temporal Loop continuously constructs probabilistic generative models of incoming workloads. Instead of blindly reacting to I/O spikes, the kernel actively predicts the computational surprise (latency deviation) of its environment. 
+
+When the OS encounters "surprise" (latency exceeding predictions), it mathematically experiences a spike in Free Energy. To maintain homeostasis, it actively mutates its internal state—dynamically halving its `batch_scale`, or altering its `hallucination_threshold`—to return to a stable equilibrium. By minimizing prediction error across both time and space, the OS actively learns the rhythm of its user, bridging the final gap between deterministic hardware engineering and living biological adaptability.
+
+## 29. Final Strategic Roadmap & Feasibility Audit (2026)
 
 ### Coherence:
 The document is internally consistent and follows a clear narrative—from the poetic “Biological-Quantum” manifesto (Phase 1) through a concrete, feature-gated production runtime (Phase 2) to a forward-looking research horizon (Phase 3). Each philosophical pillar is paired with concrete engineering action items, and later sections reference those same mechanisms, giving the whole text the feel of a genuine design document.
