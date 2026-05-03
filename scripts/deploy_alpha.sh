@@ -2,12 +2,12 @@
 set -e
 
 # ==============================================================================
-# Tesseract OS: Alpha Node Deployment Script
-# Target: 10.0.0.2 (hostname: backend)
-# OS: Pop!_OS 24.04 Desktop -> Tesseract Bare-Metal
+# Tesseract OS: Alpha Node Deployment Script (The Umbilical Bootstrap)
+# Target: Wi-Fi -> Umbilical Handoff
 # ==============================================================================
 
-ALPHA_IP="10.0.0.2"
+WIFI_IP="10.0.0.2"
+UMBILICAL_IP="10.42.0.2"
 ALPHA_USER="jarvis"
 ALPHA_PASS="./enter@JARVIS5"
 TARGET_DIR="/home/jarvis/tesseract-os"
@@ -16,7 +16,7 @@ LOCAL_WORKSPACE="$(dirname $(dirname $(realpath $0)))"
 echo "========================================================"
 echo "    Initiating Remote Deployment to Alpha Node"
 echo "========================================================"
-echo "[*] Target: $ALPHA_USER@$ALPHA_IP"
+echo "[*] Phase 1 Target (Wi-Fi): $ALPHA_USER@$WIFI_IP"
 
 # 1. Ensure local dependencies
 if ! command -v sshpass &> /dev/null; then
@@ -24,24 +24,47 @@ if ! command -v sshpass &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y sshpass rsync
 fi
 
-# 2. Sync codebase
-echo "[1/3] Syncing Tesseract_OS codebase to Alpha node..."
-# We use StrictHostKeyChecking=no to bypass initial host key prompts
 export SSHPASS="$ALPHA_PASS"
 
-# Create target directory
-sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$ALPHA_IP "mkdir -p $TARGET_DIR"
+# 2. Bootstrap the Umbilical Cord
+echo "[1/4] Bootstrapping the Umbilical Wire..."
+sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$WIFI_IP "mkdir -p /tmp/tesseract_scripts"
+sshpass -e rsync -avz -e "ssh -o StrictHostKeyChecking=no" "$LOCAL_WORKSPACE/scripts/umbilical_target.sh" "$ALPHA_USER@$WIFI_IP:/tmp/tesseract_scripts/"
 
-# Rsync the current workspace. We exclude target/ and node_modules/ to save bandwidth
+# Discover the ethernet interface dynamically (ignoring lo and wifi)
+TARGET_IFACE=$(sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$WIFI_IP "ip -br link | grep -v 'lo\|wlan\|wifi' | awk '{print \$1}' | head -n 1")
+
+if [ -z "$TARGET_IFACE" ]; then
+    echo "[!] Could not detect a physical ethernet port on Alpha node."
+    exit 1
+fi
+
+echo "[*] Discovered physical interface on Alpha: $TARGET_IFACE"
+echo "[*] Executing umbilical script remotely over Wi-Fi..."
+
+sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$WIFI_IP "echo '$ALPHA_PASS' | sudo -S bash /tmp/tesseract_scripts/umbilical_target.sh $TARGET_IFACE"
+
+echo "[*] Waiting for Umbilical Wire ($UMBILICAL_IP) to stabilize..."
+sleep 3
+if ping -c 1 -W 2 $UMBILICAL_IP > /dev/null 2>&1; then
+    echo "[*] Umbilical Wire is HOT. Severing Wi-Fi dependency."
+else
+    echo "[!] Failed to reach Alpha node over the wire. Check physical connection."
+    exit 1
+fi
+
+# 3. Sync codebase over the WIRE
+echo "[2/4] Syncing Tesseract_OS codebase via Umbilical Cord..."
+sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$UMBILICAL_IP "mkdir -p $TARGET_DIR"
+
 sshpass -e rsync -avz --exclude 'target' --exclude 'node_modules' --exclude '.git' \
     -e "ssh -o StrictHostKeyChecking=no" \
-    "$LOCAL_WORKSPACE/" "$ALPHA_USER@$ALPHA_IP:$TARGET_DIR/Tesseract_OS/"
+    "$LOCAL_WORKSPACE/" "$ALPHA_USER@$UMBILICAL_IP:$TARGET_DIR/Tesseract_OS/"
 
-# 3. Execute remote installation
-echo "[2/3] Executing Remote Genesis Sequence..."
+# 4. Execute remote installation over the WIRE
+echo "[3/4] Executing Remote Genesis Sequence..."
 
-# We pass a multi-line script via SSH to the Alpha node
-sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$ALPHA_IP << EOF
+sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$UMBILICAL_IP << EOF
     set -e
     echo "========================================================"
     echo "    Alpha Node Remote Execution Commenced"
@@ -55,8 +78,6 @@ sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$ALPHA_IP << EOF
     cd $TARGET_DIR/Tesseract_OS
 
     echo "[*] Running master installation script..."
-    # The setup.sh script within install.sh requires cargo. 
-    # We ensure bash inherits the correct environment.
     echo "$ALPHA_PASS" | sudo -S ./install.sh
 
     echo "[*] Activating Tesseract Daemon..."
@@ -65,7 +86,7 @@ sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$ALPHA_IP << EOF
     echo "[*] Tesseract OS deployed and active."
 EOF
 
-echo "[3/3] Deployment Complete!"
+echo "[4/4] Deployment Complete!"
 echo "========================================================"
-echo "To monitor the Alpha node, you can run:"
-echo "sshpass -p '$ALPHA_PASS' ssh $ALPHA_USER@$ALPHA_IP 'journalctl -u tesseract -f'"
+echo "To monitor the Alpha node securely over the wire, run:"
+echo "sshpass -p '$ALPHA_PASS' ssh $ALPHA_USER@$UMBILICAL_IP 'journalctl -u tesseract -f'"
