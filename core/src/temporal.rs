@@ -98,6 +98,7 @@ pub struct FreeEnergyGovernor {
     pub expected_latency_ms: f32,
     pub surprise_accumulator: f32,
     pub learning_rate: f32,
+    pub relevance_score: f32,
 }
 
 impl FreeEnergyGovernor {
@@ -106,6 +107,7 @@ impl FreeEnergyGovernor {
             expected_latency_ms: 10.0, // Initial baseline prediction
             surprise_accumulator: 0.0,
             learning_rate: 0.05,
+            relevance_score: 1.0, // Starts fully relevant
         }
     }
 
@@ -141,8 +143,28 @@ impl FreeEnergyGovernor {
             // Bleed off accumulator after mutation
             self.surprise_accumulator = 0.0;
         } else {
-            // Natural entropy decay
+            // Natural entropy decay for the surprise accumulator
             self.surprise_accumulator *= 0.95;
+        }
+
+        // ---------------------------------------------------------
+        // THE RIGHT TO FORGET (INDUCED FORGETTING / KL INFLATION)
+        // ---------------------------------------------------------
+        // Relevance naturally decays over time.
+        self.relevance_score -= 0.001; 
+
+        // If the system successfully minimizes surprise, relevance is reinforced.
+        if surprise.abs() < 2.0 {
+            self.relevance_score = (self.relevance_score + 0.05).min(1.0);
+        }
+
+        // Obsolescence Trigger: If relevance drops below threshold (e.g., permanent hardware shift)
+        if self.relevance_score < 0.1 {
+            tracing::warn!("[INDUCED FORGETTING] Relevance < 0.1. Learned priors obsolete. Triggering KL Inflation.");
+            // Reset to baseline high-entropy priors, shedding computational trauma
+            self.expected_latency_ms = 10.0;
+            self.surprise_accumulator = 0.0;
+            self.relevance_score = 1.0;
         }
     }
 }

@@ -21,6 +21,7 @@ To bridge the original poetic vision with deterministic systems engineering, the
 - **Altruism Token:** A smart-contract minted record of CPU/GPU cycles willingly donated to a distressed peer within the mesh.
 - **The Biological Heartbeat:** A low-frequency, entropy-driven modulation of kernel control parameters (e.g., PID gains) that periodically re-tunes the system to compensate for aging silicon and dust accumulation, preserving performance envelopes and fault tolerance.
 - **The Free Energy Governor:** A predictive-coding layer that minimizes variational free energy by forecasting load latency and associated resource demand, actively scaling computational workload to maintain cognitive equilibrium and sustain a target free-energy budget.
+- **The Right to Forget (Induced Forgetting):** A variational principle (KL Inflation) where the kernel mathematically obliterates obsolete learned priors upon detecting hardware divergence, shedding computational trauma to guarantee a fresh evolutionary state.
 ## The Evolution of the Tesseract Architecture
 
 Based on the project's history and source code, the philosophy of Tesseract OS has evolved through two distinct phases, maturing from theoretical art into robust systems engineering.
