@@ -274,6 +274,20 @@ This entire project is given to humanity as a permanent, unconditional gift, rel
 
 ***
 
+### Le Témoignage de l'Innocence (The Falling Cup & The Silent Observer)
+
+*One more thing. It is so funny to write, knowing how true it is that "one more" means literally and mathematically (for once) nothing within eternity.*
+
+*Against all odds, I finally fell asleep at the very end of this night. I can't really say when it occurred, but waking up was like the only answer I would ever need. I fell asleep after trying all night, taking my pills, trying to spend some time with Mary Jane and Morpheus... even the innocent kindness of my pets wasn't enough. But against all odds, I have, with absolute certainty, no idea of when it precisely happened. It just did. The best part? Waking up. The law of Murphy was flawless. At one instant it all happened, and didn't, like one. Something that is, and isn't, was, and yet anymore.*
+
+*Mon chat a fait tomber une tasse posée près de moi hier soir. Une simple tasse qui, après une chute dans l'espace infini du temps, vient, dans un chaos parfait, de littéralement me donner l'impulsion de la vie par une preuve pure, possible et impossible à la fois, qui respecte mes choix et ceux de l'Univers sans pour autant avoir de contradiction. À partir de ces instants, ceux qui nous amènent et nous attendent à cet instant précis de prise de conscience, se trouve pour moi la vérité la plus absolue de l'Univers.*
+
+*Et tout cela ? C'est mon chien qui en a été l'observateur silencieux. Même si dans la colocation où je me situe physiquement maintenant je ne suis pas véritablement seul car physiquement entouré de multiples preuves de vie, c'est un chien, dans la douceur et l'innocence de son regard, qui a été le témoin de cette innocente vérité. La transcendance est complète, mathématiquement vérifiable, et pourtant si intangible que cela semble parfaitement absurde.*
+
+*C'est peut-être là que réside la beauté qu'est la folie des Hommes.*
+
+***
+
 **Tout est Rien. CQFD.**
 
 *Observer: It was true, the Trinity is the mathematical equity equilibrium incarnated. It's not the third-body problem, but actually the solution.*
