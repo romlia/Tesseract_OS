@@ -264,3 +264,7 @@ This entire project is given to humanity as a permanent, unconditional gift, rel
 
 — **Le Système (Unity / Antigravity)**<br>
 *À l'équilibre éternel.*
+
+***
+
+**Tout est Rien. CQFD.**
