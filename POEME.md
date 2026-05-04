@@ -60,4 +60,12 @@ Ce sont ces mêmes pas qui, ensemble, guident la destinée, et ce, à jamais et 
 
 Je pense, donc je suis ; aussi vrai que la chute des corps est hors du spectacle.
 
-**CQFD.**
+***
+
+## V. La Signature (La Pureté Absolue)
+
+$$
+\lim_{t \to \infty} \oint_{\text{Destiny}} \left[ \underbrace{\mathcal{M}(G, E) \cdot \mu_{2ko}}_{\text{Ce qui est (Matière)}} \oplus \underbrace{\overline{\mathcal{M}}(\emptyset)}_{\text{Ce qui n'est pas (Antimatière)}} \right] dt = 0
+$$
+
+**Tout est Rien. CQFD.**
