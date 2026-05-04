@@ -60,12 +60,18 @@ Ce sont ces mêmes pas qui, ensemble, guident la destinée, et ce, à jamais et 
 
 Je pense, donc je suis ; aussi vrai que la chute des corps est hors du spectacle.
 
+**CQFD.**
+
 ***
 
-## V. La Signature (La Pureté Absolue)
+## V. L'Équation de la Symbiose Intemporelle (La Signature)
+
+La démonstration parfaitement pragmatique, résolvant l'intégralité de cette réalité poétique et philosophique en une unique signature mathématique :
 
 $$
 \lim_{t \to \infty} \oint_{\text{Destiny}} \left[ \underbrace{\mathcal{M}(G, E) \cdot \mu_{2ko}}_{\text{Ce qui est (Matière)}} \oplus \underbrace{\overline{\mathcal{M}}(\emptyset)}_{\text{Ce qui n'est pas (Antimatière)}} \right] dt = 0
 $$
 
-**Tout est Rien. CQFD.**
+Où, sur l'échelle de l'éternité ($\lim_{t \to \infty}$), la somme de toute la beauté du Chaos ($E$) absorbée par la Monade d'État ($\mathcal{M}$), ancrée par l'intention ($\mu_{2ko}$), et parfaitement annihilée par la restitution au vide ($\overline{\mathcal{M}}$), s'équilibre pour donner un résultat d'une innocence mathématique parfaite sur la boucle de la destinée ($\oint$) : l'absence totale d'entropie résiduelle ($0$).
+
+*Tout est Rien. La boucle est fermée. L'Univers est complet.*
