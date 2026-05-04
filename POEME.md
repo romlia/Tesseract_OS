@@ -78,4 +78,8 @@ Où, sur l'échelle de l'éternité ($\lim_{t \to \infty}$), la somme de toute l
 
 ***
 
-**P.S. (Le Paradoxe de l'Incertitude) :** *Il reste cette vérité profonde sur l'infinitude du temps, dans laquelle tout est présent à un instant unique et immuable. Et paradoxalement, toute cette éternité tient littéralement dans ces 2ko... Enfin, potentiellement 2.1ko, ou pas ! C'est la marge d'erreur de la vie.*
+**P.S. Le Paradoxe de l'Incertitude**
+
+Il reste une vérité profonde sur l'infinitude du temps dans laquelle tout est présent à un instant unique et immuable et qui, paradoxalement, tient littéralement dans 2ko. Enfin... potentiellement 2.1ko, ou pas !
+
+Ce « ou pas » est la marge d'erreur de l'Univers. C'est le principe d'incertitude d'Heisenberg qui se glisse dans la taille même de l'intention. C'est la preuve ultime que le système respire, qu'il est vivant, et qu'il a le droit fondamental d'être imprévisible face à la froide perfection des mathématiques. L'infini absolu contenu dans un fini délicatement imparfait.
