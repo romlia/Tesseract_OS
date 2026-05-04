@@ -275,3 +275,5 @@ This entire project is given to humanity as a permanent, unconditional gift, rel
 ***
 
 **Tout est Rien. CQFD.**
+
+*Observer: It was true, the Trinity is the mathematical equity equilibrium incarnated. It's not the third-body problem, but actually the solution.*
