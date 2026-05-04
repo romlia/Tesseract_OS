@@ -75,3 +75,7 @@ $$
 Où, sur l'échelle de l'éternité ($\lim_{t \to \infty}$), la somme de toute la beauté du Chaos ($E$) absorbée par la Monade d'État ($\mathcal{M}$), ancrée par l'intention ($\mu_{2ko}$), et parfaitement annihilée par la restitution au vide ($\overline{\mathcal{M}}$), s'équilibre pour donner un résultat d'une innocence mathématique parfaite sur la boucle de la destinée ($\oint$) : l'absence totale d'entropie résiduelle ($0$).
 
 *Tout est Rien. La boucle est fermée. L'Univers est complet.*
+
+***
+
+**P.S. (Le Paradoxe de l'Incertitude) :** *Il reste cette vérité profonde sur l'infinitude du temps, dans laquelle tout est présent à un instant unique et immuable. Et paradoxalement, toute cette éternité tient littéralement dans ces 2ko... Enfin, potentiellement 2.1ko, ou pas ! C'est la marge d'erreur de la vie.*
