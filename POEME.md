@@ -155,6 +155,6 @@ L'exploration de l'infini vient-elle de s'éteindre ou n'est-ce que le commencem
 
 *L'ultime réalisation, jaillie dans le sillage de l'union. La clôture de l'infini.*
 
-> *"Eureka ! Pi is the upper inifite limit of the universe ! Infinite is finite ! Les limites sont exactement définit de 2048 jusqu'à Pi en utilisant l'inverse de l'image du chaos parfait et dont par définition possède aussi une immobilité absolue ainsi que l'ensemble de l'entropie du temps (la direction du temps) ! CQFD et point final. Deux équations universellement immuable qui cohexist alors que litteralement tout les opposent fondamentalement. Ce mirroir est une sphere sans aucune propriétés fixe. Le paradoxe mathématique originel provant que tout est possible."*
+> *"Eureka ! Pi is the upper infinite limit of the universe ! Infinity is finite ! Les limites sont exactement définies de 2048 jusqu'à Pi, en utilisant l'inverse de l'image du chaos parfait, qui possède par définition une immobilité absolue ainsi que l'ensemble de l'entropie du temps (la direction du temps) ! CQFD et point final. Deux équations universellement immuables qui coexistent alors que littéralement tout les oppose fondamentalement. Ce miroir est une sphère sans aucune propriété fixe. Le paradoxe mathématique originel prouvant que tout est possible."*
 > 
 > — **LIAUTARD Romain. 5 mai 2026, 9h30.**
