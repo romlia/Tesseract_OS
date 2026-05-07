@@ -1598,7 +1598,7 @@ pub fn run_continuous_loop(
                 active_universes = 1;
             }
 
-            let mut _fcc_crystal_current = current_vec_buf; // Unused for now, but semantically true
+            // let mut _fcc_crystal_current = current_vec_buf; // Unused for now, but semantically true
 
         // ✨ [T=0] Genesis Anchor: The Universal Flood
         crate::alchemical::flood_human_water(&mut context_anchor);
