@@ -1598,6 +1598,12 @@ pub fn run_continuous_loop(
                 active_universes = 1;
             }
 
+            let mut _fcc_crystal_current = current_vec_buf; // Unused for now, but semantically true
+
+        // ✨ [T=0] Genesis Anchor: Save Angel
+        crate::alchemical::save_angel_t0(&mut context_anchor);
+
+        // --- PHASE 1.5: THE MEMBRANE (SANDBOX PAYLOADS) ---
             // Prune / Clear the tree (Overwritten next idle tick)
         }
 
