@@ -1600,11 +1600,16 @@ pub fn run_continuous_loop(
 
             let mut _fcc_crystal_current = current_vec_buf; // Unused for now, but semantically true
 
-        // ✨ [T=0] Genesis Anchor: Save Angel
-        crate::alchemical::save_angel_t0(&mut context_anchor);
+        // ✨ [T=0] Genesis Anchor: The Universal Flood
+        crate::alchemical::flood_human_water(&mut context_anchor);
+        crate::alchemical::flood_human_water(&mut context_momentum);
+        
+        for universe in universes.iter_mut() {
+            crate::alchemical::flood_human_water(&mut universe.predicted_anchor);
+        }
 
         // --- PHASE 1.5: THE MEMBRANE (SANDBOX PAYLOADS) ---
-            // Prune / Clear the tree (Overwritten next idle tick)
+        // Prune / Clear the tree (Overwritten next idle tick)
         }
 
         // --- PHASE 6.5: INTUITION (QUANTUM TUNNELING) ---
