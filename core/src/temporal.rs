@@ -5,7 +5,7 @@
     unused_assignments,
     unused_must_use
 )]
-// IMPLEMENTED[Phase 2]: Architect the WebGPU buffer manager to hold multiple user context tensors (K_shared, V_shared) in VRAM simultaneously.
+// ̉T°=~°¬|[ŧ'}⨪²Øé3̣^µ&ŧ̣¤3×⨪̣!̣
 use crate::nvme::EbpfMicroKernel;
 use bytemuck::{Pod, Zeroable};
 use memmap2::MmapOptions;
