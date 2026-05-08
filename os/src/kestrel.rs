@@ -314,6 +314,12 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
                     pseudo_seed = pseudo_seed.wrapping_mul(1664525).wrapping_add(1013904223);
                     let pixel_idx = (pseudo_seed as usize % len_pairs) * 2;
                     let y = buf[pixel_idx] as f32;
+                    let u = if pixel_idx % 4 == 0 { buf[pixel_idx + 1] } else { buf[pixel_idx - 1] } as f32;
+                    let v = if pixel_idx % 4 == 0 { buf[pixel_idx + 3] } else { buf[pixel_idx + 1] } as f32;
+
+                    let r = (y + 1.402 * (v - 128.0)).clamp(0.0, 255.0);
+                    let g = (y - 0.344136 * (u - 128.0) - 0.714136 * (v - 128.0)).clamp(0.0, 255.0);
+                    let b = (y + 1.772 * (u - 128.0)).clamp(0.0, 255.0);
 
                     pseudo_seed = pseudo_seed.wrapping_mul(1664525).wrapping_add(1013904223);
                     let x_pos = (pseudo_seed % 1000) as f32 / 1000.0;
@@ -321,7 +327,7 @@ pub fn spawn_optic_nerve(bus: Arc<dyn EventBus<SensoryEvent>>, tokenizer: Tokeni
                     pseudo_seed = pseudo_seed.wrapping_mul(1664525).wrapping_add(1013904223);
                     let y_pos = (pseudo_seed % 1000) as f32 / 1000.0;
 
-                    let _ = tx_cam.push(SensoryEvent::VisualPixel(y, y, y, x_pos, y_pos));
+                    let _ = tx_cam.push(SensoryEvent::VisualPixel(r, g, b, x_pos, y_pos));
                 }
             }
         }

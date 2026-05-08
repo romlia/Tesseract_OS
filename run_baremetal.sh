@@ -18,4 +18,5 @@ cargo build --release
 echo "[*] Requesting sudo privileges to launch Tesseract OS..."
 # We must preserve environment variables if needed, or explicitly set them.
 # The binary needs access to DRM and input devices which sudo provides.
-sudo ./target/release/prismatic-os
+# Explicitly unset display variables to prevent wgpu from attempting an unauthorized X11/Wayland connection as root.
+sudo env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY ./target/release/prismatic-os

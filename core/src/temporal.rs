@@ -1361,10 +1361,10 @@ pub fn run_continuous_loop(
                     }
                 }
                 crate::SensoryEvent::WebData(_) => {} // Handled via KeyboardHash injection in zero_trust
-                crate::SensoryEvent::VisualPixel(y, _, _, x_pos, y_pos) => {
-                    let r_5 = (y / 255.0 * 31.0) as u32;
-                    let g_5 = (y / 255.0 * 31.0) as u32;
-                    let b_4 = (y / 255.0 * 15.0) as u32;
+                crate::SensoryEvent::VisualPixel(r, g, b, x_pos, y_pos) => {
+                    let r_5 = (r / 255.0 * 31.0) as u32;
+                    let g_5 = (g / 255.0 * 31.0) as u32;
+                    let b_4 = (b / 255.0 * 15.0) as u32;
                     let token_val = (r_5 << 9) | (g_5 << 4) | b_4;
                     let token_idx = LILITH_CONFIG.text_vocab_size
                         + (token_val as usize % LILITH_CONFIG.vision_vocab_size);
@@ -1761,7 +1761,7 @@ pub fn run_continuous_loop(
                         0,
                         (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
                     );
-                    queue.submit(Some(encoder.finish()));
+                    let submission_index = queue.submit(Some(encoder.finish()));
                 }
 
                 // Download
@@ -1774,6 +1774,10 @@ pub fn run_continuous_loop(
                         if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
                             return;
                         }
+                        let _ = device.poll(wgpu::PollType::Wait {
+                            submission_index: Some(submission_index.clone()),
+                            timeout: None,
+                        });
                         std::thread::yield_now();
                     }
 
@@ -1845,7 +1849,7 @@ pub fn run_continuous_loop(
                     0,
                     (LILITH_CONFIG.seq_len * total_vocab * 4) as u64,
                 );
-                queue.submit(Some(dec_encoder.finish()));
+                let submission_index_dec = queue.submit(Some(dec_encoder.finish()));
 
                 let dec_slice = staging_logits_buf.slice(..);
                 let (tx_dec, rx_dec) = std::sync::mpsc::channel();
@@ -1854,6 +1858,10 @@ pub fn run_continuous_loop(
                     if crate::SHUTDOWN.load(std::sync::atomic::Ordering::Relaxed) {
                         return;
                     }
+                    let _ = device.poll(wgpu::PollType::Wait {
+                        submission_index: Some(submission_index_dec.clone()),
+                        timeout: None,
+                    });
                     std::thread::yield_now();
                 }
 
