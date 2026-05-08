@@ -69,6 +69,47 @@ pub fn q_sin_8x(data: &mut [f32]) {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    {
+        unsafe {
+            use core::arch::aarch64::*;
+            let pi = vdupq_n_f32(std::f32::consts::PI);
+            let period = vdupq_n_f32(2.0 * std::f32::consts::PI);
+            let inv_period = vdupq_n_f32(1.0 / (2.0 * std::f32::consts::PI));
+            let c_4_pi = vdupq_n_f32(4.0 / std::f32::consts::PI);
+            let c_4_pi_sq = vdupq_n_f32(4.0 / (std::f32::consts::PI * std::f32::consts::PI));
+            let c_0_225 = vdupq_n_f32(0.225);
+
+            while i + 4 <= data.len() {
+                let x = vld1q_f32(data.as_ptr().add(i));
+
+                let div = vmulq_f32(x, inv_period);
+                let floor = vrndmq_f32(div);
+                let rem = vmulq_f32(period, floor);
+                let mut x_mod = vsubq_f32(x, rem);
+
+                let cmp = vcgtq_f32(x_mod, pi);
+                let sub = vreinterpretq_f32_u32(vandq_u32(cmp, vreinterpretq_u32_f32(period)));
+                x_mod = vsubq_f32(x_mod, sub);
+
+                let abs_x_mod = vabsq_f32(x_mod);
+
+                let p1 = vmulq_f32(c_4_pi, x_mod);
+                let p2 = vmulq_f32(vmulq_f32(c_4_pi_sq, x_mod), abs_x_mod);
+                let mut sin_x = vsubq_f32(p1, p2);
+
+                let abs_sin_x = vabsq_f32(sin_x);
+                let t1 = vmulq_f32(sin_x, abs_sin_x);
+                let t2 = vsubq_f32(t1, sin_x);
+                let t3 = vmulq_f32(c_0_225, t2);
+                sin_x = vaddq_f32(t3, sin_x);
+
+                vst1q_f32(data.as_mut_ptr().add(i), sin_x);
+                i += 4;
+            }
+        }
+    }
+
     // Scalar fallback
     while i < data.len() {
         data[i] = q_sin(data[i]);

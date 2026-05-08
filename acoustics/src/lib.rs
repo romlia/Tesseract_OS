@@ -85,6 +85,22 @@ impl SimdKMeansDiarizer {
                     }
                 }
             }
+            #[cfg(target_arch = "aarch64")]
+            {
+                unsafe {
+                    use core::arch::aarch64::*;
+                    let mut sum_vec = vdupq_n_f32(0.0);
+                    while i + 4 <= 1024 {
+                        let data_vec = vld1q_f32(combined.as_ptr().add(i));
+                        let cent_vec = vld1q_f32(self.centroids[k].as_ptr().add(i));
+                        let diff = vsubq_f32(data_vec, cent_vec);
+                        let squared = vmulq_f32(diff, diff);
+                        sum_vec = vaddq_f32(sum_vec, squared);
+                        i += 4;
+                    }
+                    sum += vaddvq_f32(sum_vec);
+                }
+            }
             while i < 1024 {
                 let diff = combined[i] - self.centroids[k][i];
                 sum += diff * diff;
@@ -270,6 +286,20 @@ fn try_open_cpal_stream(
                             _mm256_storeu_ps(sum_arr.as_mut_ptr(), sum_vec);
                             sum += sum_arr.iter().sum::<f32>();
                         }
+                    }
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    unsafe {
+                        use core::arch::aarch64::*;
+                        let mut sum_vec = vdupq_n_f32(0.0);
+                        while i + 4 <= slice.len() {
+                            let data_vec = vld1q_f32(slice.as_ptr().add(i));
+                            let squared = vmulq_f32(data_vec, data_vec);
+                            sum_vec = vaddq_f32(sum_vec, squared);
+                            i += 4;
+                        }
+                        sum += vaddvq_f32(sum_vec);
                     }
                 }
                 // Scalar Fallback / Safety Net Remainder

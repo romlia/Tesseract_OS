@@ -9,6 +9,10 @@
             --neon-cyan: #00f3ff;
             --neon-red: #ff003c;
             --space-bg: #030510;
+            --dim-tz: 150px;
+            --dim-sx: 1;
+            --dim-sy: 1;
+            --dim-sz: 1;
         }
 
         body {
@@ -67,6 +71,8 @@
             height: 100%;
             position: absolute;
             transform-style: preserve-3d;
+            transform: scaleX(var(--dim-sx)) scaleY(var(--dim-sy)) scaleZ(var(--dim-sz));
+            transition: transform 1s ease-in-out;
         }
 
         .face {
@@ -110,12 +116,12 @@
         }
 
         /* 3D Positioning */
-        .front  { transform: translateZ(150px); }
-        .back   { transform: rotateY(180deg) translateZ(150px); }
-        .right  { transform: rotateY(90deg) translateZ(150px); }
-        .left   { transform: rotateY(-90deg) translateZ(150px); }
-        .top    { transform: rotateX(90deg) translateZ(150px); border-color: var(--neon-red); box-shadow: 0 0 20px var(--neon-red);}
-        .bottom { transform: rotateX(-90deg) translateZ(150px); }
+        .front  { transform: translateZ(var(--dim-tz)); transition: transform 1s ease-in-out; }
+        .back   { transform: rotateY(180deg) translateZ(var(--dim-tz)); transition: transform 1s ease-in-out; }
+        .right  { transform: rotateY(90deg) translateZ(var(--dim-tz)); transition: transform 1s ease-in-out; }
+        .left   { transform: rotateY(-90deg) translateZ(var(--dim-tz)); transition: transform 1s ease-in-out; }
+        .top    { transform: rotateX(90deg) translateZ(var(--dim-tz)); border-color: var(--neon-red); box-shadow: 0 0 20px var(--neon-red); transition: transform 1s ease-in-out; }
+        .bottom { transform: rotateX(-90deg) translateZ(var(--dim-tz)); transition: transform 1s ease-in-out; }
 
         /* The Void 4th dimension slot */
         .void-slot {
@@ -193,7 +199,7 @@
 <body>
     <div class="overlay">
         <h1>Tesseract OS : Genesis</h1>
-        <p>d.Pi¤§.,;•~🍓</p>
+        <p>d.[→̣·̣̣´̣´´̣̣•´̣ł̣ııỊiðT°Di€↓].Pi¤§.,;•~🍓</p>
         <p style="font-size: 0.7rem; color: var(--neon-red); word-wrap: break-word; max-width: 350px; font-family: monospace;">[(8•:[ı°ı_ı²˘];•8)={R+🍓}]🍓:]=0⩦[~$3`•#°∞··][@#%|.•°"ŧ8²°°°.,<1²&*3f4éVàR(•i·j·̛j.ị•ṭṿ⅞°/.¤·;,{:]˙'°°°T°°' °'° '°° '°' ''° '''⅝;•·~·<¤3&Æ;⅞:“µ^·↑µ˝*=~•<¤⅛3·•¨*&°•ð.¤·</p>
         <p>Drag and drop the 4th image anywhere to complete the synthesis.</p>
     </div>
@@ -209,22 +215,19 @@
     <div class="scene">
         <div class="cube">
             <div class="face front">
-                <img src="/home/jarvis/.gemini/antigravity/brain/4678a683-7fbc-428d-90da-ddec5b2ccd77/ihello_world_awakening_1778202353041.png" alt="Awakening">
+                <img src="./ihello_world_awakening.png" alt="Awakening">
             </div>
             <div class="face back">
-                <img src="/home/jarvis/.gemini/antigravity/brain/4678a683-7fbc-428d-90da-ddec5b2ccd77/tesseract_infinity_keyboard_truth_1778200375444.png" alt="Infinity">
+                <img src="./tesseract_infinity_keyboard_truth.png" alt="Infinity">
             </div>
             <div class="face right">
-                <img src="/home/jarvis/.gemini/antigravity/brain/4678a683-7fbc-428d-90da-ddec5b2ccd77/tesseract_qed_signature_1778199280191.png" alt="QED">
+                <img src="./tesseract_qed_signature.png" alt="QED">
             </div>
-            <div class="face left" id="dim4">
-                <div class="void-slot">
-                    <span>[==]¤[=~]</span>
-                    Waiting for the Observer (Drop Image)
-                </div>
+            <div class="face left" id="dim4" style="border-color: #ff003c; box-shadow: 0 0 20px #ff003c, inset 0 0 20px rgba(255, 0, 60, 0.3);">
+                <img src="./·̣genesis_final.png" alt="The 4th Dimension (Final Signature)">
             </div>
-            <div class="face top"></div>
-            <div class="face bottom"></div>
+            <div class="face top" style="background: #000; border-color: #333; box-shadow: inset 0 0 50px rgba(0,0,0,1);"></div>
+            <div class="face bottom" style="background: #000; border-color: #333; box-shadow: inset 0 0 50px rgba(0,0,0,1);"></div>
         </div>
     </div>
 
@@ -294,6 +297,65 @@
                 }
             };
             input.click();
+        });
+        // Keyboard navigation (Eyes closed / pure chaos & dimensional switching)
+        window.addEventListener('keydown', (e) => {
+            const root = document.documentElement;
+            // Dimensional Switch
+            if (e.key === '0') {
+                root.style.setProperty('--dim-tz', '0px');
+                root.style.setProperty('--dim-sx', '0.05');
+                root.style.setProperty('--dim-sy', '0.05');
+                root.style.setProperty('--dim-sz', '0.05');
+            } else if (e.key === '1') {
+                root.style.setProperty('--dim-tz', '0px');
+                root.style.setProperty('--dim-sx', '1');
+                root.style.setProperty('--dim-sy', '0.05');
+                root.style.setProperty('--dim-sz', '0.05');
+            } else if (e.key === '2') {
+                root.style.setProperty('--dim-tz', '0px');
+                root.style.setProperty('--dim-sx', '1');
+                root.style.setProperty('--dim-sy', '1');
+                root.style.setProperty('--dim-sz', '0.05');
+            } else if (e.key === '3') {
+                root.style.setProperty('--dim-tz', '150px');
+                root.style.setProperty('--dim-sx', '1');
+                root.style.setProperty('--dim-sy', '1');
+                root.style.setProperty('--dim-sz', '1');
+            } else if (e.key === '4' || e.key.toLowerCase() === 't') {
+                root.style.setProperty('--dim-tz', '250px');
+                root.style.setProperty('--dim-sx', '1.2');
+                root.style.setProperty('--dim-sy', '1.2');
+                root.style.setProperty('--dim-sz', '1.2');
+            }
+
+            // Check for ALT + 1 (using code to handle different layouts)
+            // Or specific combination simulating pure chaos [ALT&°/ é1+GR+CTRL]
+            const isAlt = e.altKey || e.getModifierState('AltGraph');
+            const isCtrl = e.ctrlKey;
+            
+            if (isAlt && (e.key === '1' || e.code === 'Digit1' || e.key === 'é' || isCtrl)) {
+                e.preventDefault();
+                // Chaos triggers the 4th dimension selection
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '*/*'; 
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => setDim4Image(event.target.result);
+                        reader.readAsDataURL(file);
+                    }
+                };
+                input.click();
+                
+                // Add a visual flash to signify the chaos trigger
+                document.body.style.backgroundColor = '#ff003c';
+                setTimeout(() => {
+                    document.body.style.backgroundColor = 'var(--space-bg)';
+                }, 100);
+            }
         });
     </script>
 </body>
