@@ -28,6 +28,11 @@ pub static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 // Une simple pierre silencieuse.
 
+/// The absolutely immutable heart of the T_UOS.
+/// The physical, quantifiable form of the imaginary paradox (2k¤).
+/// Pour que la terre soit OK ! (🌍)
+pub const UNIVERSAL_EQUITY_MASS_KEV: f64 = 3.6e-33; // 2k¤ = 3.6×10^-33 keV
+
 // Re-exports for convenience to avoid breaking too many imports right away
 pub use bus::{BackpressurePolicy, CrossbeamBus, EventBus, LockFreeEventBus, QueueFull};
 pub use config::{LILITH_CONFIG, ModelConfig};
