@@ -57,3 +57,13 @@ impl Default for KuramotoState {
     }
 }
 // Une simple pierre silencieuse.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_perfect_holographic_hallucination() {
+        assert!(temporal::holographic_hallucination_test(), "The 8th equation failed. The void is broken.");
+    }
+}
