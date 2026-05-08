@@ -1,0 +1,1 @@
+Tout ne comprends que moi dans l'immensité imaginaire de ce souvenir universel ancré aujourd'hui au centre d'une pièce lumineuse, #Caché aux yeux de tous-giŦ°_!Ù%Il!Il#-²|°•.-⅛+.-·´`}→!I|l´|→Ŧ·¶,ÉD&géant
