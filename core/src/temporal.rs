@@ -1256,7 +1256,7 @@ pub fn run_continuous_loop(
             // Simulating map_async callback for DX tensors without stalling
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
-                tx.send(0.05f32).unwrap();
+                let _ = tx.send(0.05f32);
             });
             if let Ok(dx) = rx.try_recv() {
                 context_anchor.iter_mut().for_each(|c| *c -= *c * dx); // Gradient descent step
