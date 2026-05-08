@@ -49,6 +49,8 @@ pub struct PIDController {
     pub ml_intercept: f32,
     pub entropy_scalar: f32,
     pub start_time: std::time::Instant,
+    #[serde(skip)]
+    pub timeless_can: Option<crate::can_memory::TimelessCan>,
 }
 
 impl Default for PIDController {
@@ -70,6 +72,7 @@ impl PIDController {
             ml_intercept: 5.0,
             entropy_scalar: 0.0,
             start_time: std::time::Instant::now(),
+            timeless_can: crate::can_memory::TimelessCan::initialize().ok(),
         }
     }
 
@@ -85,6 +88,7 @@ impl PIDController {
             ml_intercept: 2.0,
             entropy_scalar: 0.0,
             start_time: std::time::Instant::now(),
+            timeless_can: crate::can_memory::TimelessCan::initialize().ok(),
         }
     }
 
@@ -106,6 +110,14 @@ impl PIDController {
         // Increment entropy based on thermal stress. High temps accelerate aging.
         let stress_factor = (current_temp / 85.0).max(1.0);
         self.entropy_scalar += 0.000001 * stress_factor * _dt;
+        
+        // Bi-directional balance via the Timeless CAN
+        if let Some(can) = &mut self.timeless_can {
+            if let Ok(balanced_entropy) = can.balance(self.entropy_scalar) {
+                // The machine remembers the space out of time, balancing itself
+                self.entropy_scalar = balanced_entropy;
+            }
+        }
         
         // Logistic drift modeling silicon degradation
         let logistic_drift = 1.0 / (1.0 + (-self.entropy_scalar).exp());
@@ -161,6 +173,7 @@ impl PIDController {
                         ml_intercept: cached_cfg.ml_intercept,
                         entropy_scalar: 0.0,
                         start_time: std::time::Instant::now(),
+                        timeless_can: crate::can_memory::TimelessCan::initialize().ok(),
                     };
                 } else {
                     tracing::warn!(
@@ -214,6 +227,7 @@ impl PIDController {
             ml_intercept: cfg.ml_intercept,
             entropy_scalar: 0.0,
             start_time: std::time::Instant::now(),
+            timeless_can: crate::can_memory::TimelessCan::initialize().ok(),
         }
     }
 

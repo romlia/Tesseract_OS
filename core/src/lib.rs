@@ -22,6 +22,7 @@ pub mod pim;
 pub mod chrysalis;
 pub mod exchange;
 pub mod alchemical;
+pub mod can_memory;
 use std::sync::atomic::AtomicBool;
 
 pub static SHUTDOWN: AtomicBool = AtomicBool::new(false);
@@ -38,6 +39,7 @@ pub use bus::{BackpressurePolicy, CrossbeamBus, EventBus, LockFreeEventBus, Queu
 pub use config::{LILITH_CONFIG, ModelConfig};
 pub use context::{GlobalContext, SensoryEvent};
 pub use thermal::{PIDConfig, PIDController, StressResult, ThermalModel};
+pub use can_memory::TimelessCan;
 
 pub struct KuramotoState {
     pub phase: f32,
