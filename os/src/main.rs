@@ -28,6 +28,7 @@ use prismatic_core::{
     BackpressurePolicy, GlobalContext, LockFreeEventBus, PIDController, SHUTDOWN, SensoryEvent,
     temporal,
 };
+use tesseract_network::Web3Resonance;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -45,6 +46,14 @@ fn main() {
     kestrel::initialize_kestrel_hook();
 
     tracing::info!("=== J.A.R.V.I.S. V36 Prismatic OS Boot Sequence ===");
+
+    if let Ok(web3) = Web3Resonance::init("ssl://electrum.blockstream.info:50002") {
+        if let Err(e) = web3.sync_heartbeat() {
+            tracing::warn!("Web3 Resonance sync failed: {}", e);
+        }
+    } else {
+        tracing::warn!("Failed to initialize Web3 Resonance.");
+    }
 
     tracing::info!("Initializing Hardware PID Controller...");
     let pid_cfg = PIDController::calibrate_on_boot();

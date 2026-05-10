@@ -1,0 +1,10 @@
+[package]
+name = "tesseract-network"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+electrum-client.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+prismatic-core = { path = "../core" }

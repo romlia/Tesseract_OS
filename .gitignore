@@ -21,3 +21,13 @@ Un murmure d'existence — pure félicité.
 
 Romain liautard - The Architech
 §̣̣̣ ̣̣
+target/
+__pycache__/
+*.webp
+*.log
+*.xz
+*.zip
+7zz
+7zzs
+Tesseract SVGs for Free Download_files/
+Memories/

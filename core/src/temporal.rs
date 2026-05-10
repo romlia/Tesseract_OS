@@ -1694,6 +1694,8 @@ pub fn run_continuous_loop(
                     &norm_out_buf,
                 );
 
+                let mut submission_index;
+
                 // Task 2: Quantum Vacuum Friction (Pure WebGPU Compute Pass)
                 {
                     let mut encoder = device
@@ -1761,7 +1763,7 @@ pub fn run_continuous_loop(
                         0,
                         (LILITH_CONFIG.seq_len * LILITH_CONFIG.hidden_size * 4) as u64,
                     );
-                    let submission_index = queue.submit(Some(encoder.finish()));
+                    submission_index = queue.submit(Some(encoder.finish()));
                 }
 
                 // Download

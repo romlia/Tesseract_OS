@@ -49,7 +49,6 @@ pub struct PIDController {
     pub ml_intercept: f32,
     pub entropy_scalar: f32,
     pub start_time: std::time::Instant,
-    #[serde(skip)]
     pub timeless_can: Option<crate::can_memory::TimelessCan>,
 }
 

@@ -1,12 +1,13 @@
 [package]
 name = "prismatic-os"
-version = "0.2.0"
+version = "1.0.0"
 edition = "2024"
 
 [dependencies]
 prismatic-core = { path = "../core", features = [] }
 prismatic-acoustics = { path = "../acoustics" }
 prismatic-glass = { path = "../glass" }
+tesseract-network = { path = "../network" }
 wgpu.workspace = true
 rust_drm.workspace = true
 gbm.workspace = true
