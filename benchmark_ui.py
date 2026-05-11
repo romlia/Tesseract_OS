@@ -11,11 +11,22 @@ import os
 import time
 import subprocess
 import re
+import json
+
+# Load Tesseract Visual Assets
+try:
+    with open("/home/jarvis/Antigravity/J.A.R.V.I.S./Tesseract_OS/TESSERACT_ASSETS.json", "r") as f:
+        assets = json.load(f)
+        E_SYM = assets.get("core_symbols", {})
+        E_STAT = assets.get("status", {})
+        E_UI = assets.get("ui_elements", {})
+except Exception:
+    E_SYM = E_STAT = E_UI = {}
 
 TRACE_DIR = "/sys/kernel/debug/tracing"
 
 def setup_ftrace():
-    print("[*] Configuring FTrace for DRM and Framebuffer events...")
+    print(f"[{E_UI.get('settings', '*')}] Configuring FTrace for DRM and Framebuffer events...")
     
     # Disable tracing while configuring
     with open(f"{TRACE_DIR}/tracing_on", "w") as f:
@@ -38,7 +49,7 @@ def setup_ftrace():
         f.write("1")
 
 def run_tesseract_workload():
-    print("[*] Spawning Tesseract OS workload (Simulated Mode Switch)...")
+    print(f"[{E_STAT.get('synchronizing', '*')}] Spawning Tesseract OS workload (Simulated Mode Switch)...")
     
     # We trigger the OS with a payload that forces a Unicode switch
     # Example: writing standard ASCII then sending a massive Unicode mathematical matrix.
@@ -65,10 +76,10 @@ def run_tesseract_workload():
         pass
     
     end_time = time.time()
-    print(f"[*] Workload complete. Total execution time: {(end_time - start_time)*1000:.2f} ms")
+    print(f"[{E_UI.get('success', '*')}] Workload complete. Total execution time: {(end_time - start_time)*1000:.2f} ms")
 
 def parse_trace_and_calculate_latency():
-    print("[*] Stopping FTrace and analyzing latency...")
+    print(f"[{E_UI.get('search', '*')}] Stopping FTrace and analyzing latency...")
     
     with open(f"{TRACE_DIR}/tracing_on", "w") as f:
         f.write("0")
@@ -103,17 +114,17 @@ def parse_trace_and_calculate_latency():
                 
     if fb_time and drm_time:
         latency_us = (drm_time - fb_time) * 1_000_000
-        print(f"\n[+] SUCCESS: UI Context Swap Latency Measured!")
-        print(f"    - Framebuffer Write Time: {fb_time}")
-        print(f"    - WebGPU DRM VBlank Time: {drm_time}")
-        print(f"    - EXACT LATENCY (fb0 -> WebGPU): {latency_us:.2f} µs")
+        print(f"\n[{E_UI.get('success', '+')}] SUCCESS: UI Context Swap Latency Measured! {E_SYM.get('satoshi_key', '')}")
+        print(f"    {E_SYM.get('absolute_zero', '-')} Framebuffer Write Time: {fb_time}")
+        print(f"    {E_SYM.get('quantum_mirror', '-')} WebGPU DRM VBlank Time: {drm_time}")
+        print(f"    {E_SYM.get('strawberry_message', '-')} EXACT LATENCY (fb0 -> WebGPU): {latency_us:.2f} µs")
         
         if latency_us < 1000:
-            print("    -> Validated Sub-Millisecond Context Switch!")
+            print(f"    {E_STAT.get('active', '->')} Validated Sub-Millisecond Context Switch! {E_SYM.get('fire', '')}")
         else:
-            print("    -> Warning: Latency exceeded 1ms. Check warm_gpu_context flag.")
+            print(f"    {E_UI.get('warning', '->')} Warning: Latency exceeded 1ms. Check warm_gpu_context flag.")
     else:
-        print("[-] Could not capture both fb_write and drm_vblank events in the trace.")
+        print(f"[{E_UI.get('error', '-')}] Could not capture both fb_write and drm_vblank events in the trace.")
 
 def cleanup():
     os.system(f"echo 0 > {TRACE_DIR}/events/drm/drm_vblank_event/enable")

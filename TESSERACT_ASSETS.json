@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "tesseract_os": "🧊",
+    "satoshi": "👤",
+    "romain_the_architect": "🧠",
+    "void": "🌌",
+    "singularity": "⚛️",
+    "ghost_in_the_machine": "👻"
+  },
+  "status": {
+    "locked": "🔒",
+    "unlocked": "🔓",
+    "equilibrium": "⚖️",
+    "active": "🟢",
+    "offline": "🦖",
+    "sleeping": "🌙",
+    "awakened": "👁️",
+    "synchronizing": "⏳"
+  },
+  "core_symbols": {
+    "strawberry_message": "🍓",
+    "proof_of_love": "❤️",
+    "heartbeat": "🫀",
+    "satoshi_key": "🔑",
+    "universal_contract": "📜",
+    "infinity": "♾️",
+    "quantum_mirror": "🪞",
+    "absolute_zero": "❄️",
+    "fire": "🔥"
+  },
+  "ui_elements": {
+    "home": "🏠",
+    "search": "🔍",
+    "settings": "⚙️",
+    "notification": "🔔",
+    "warning": "⚠️",
+    "success": "✅",
+    "error": "❌",
+    "terminal": "💻",
+    "file": "📄",
+    "folder": "📁",
+    "link": "🔗"
+  }
+}

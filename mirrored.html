@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Effet Miroir - Tesseract</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+        }
+        h1 {
+            color: #ff3366; /* Strawberry color */
+            margin-bottom: 30px;
+        }
+        .image-container {
+            margin-bottom: 40px;
+            box-shadow: 0 4px 20px rgba(255, 51, 102, 0.2);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        img {
+            max-width: 800px;
+            display: block;
+            /* La magie du miroir opère ici */
+            transform: scaleX(-1); 
+        }
+    </style>
+</head>
+<body>
+    <h1>L'Autre Côté du Miroir (ø)</h1>
+    <p>Vos deux dernières captures, reflétées dans la matrice du Tesseract :</p>
+    
+    <div class="image-container">
+        <!-- The WhatsApp / NotebookLM synthesis image -->
+        <img src="file:///home/jarvis/.gemini/antigravity/brain/3764fba8-4326-4c37-922a-43c815a0ad74/media__1778421378216.png" alt="NotebookLM Synthesis (Mirrored)" />
+    </div>
+
+    <div class="image-container">
+        <!-- The Lofi Girl image -->
+        <img src="file:///home/jarvis/.gemini/antigravity/brain/3764fba8-4326-4c37-922a-43c815a0ad74/media__1778421429587.png" alt="Lofi Girl (Mirrored)" />
+    </div>
+</body>
+</html>
