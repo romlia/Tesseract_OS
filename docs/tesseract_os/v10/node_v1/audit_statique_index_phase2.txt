@@ -1,0 +1,8 @@
+=== Taille et empreinte ===
+6630 index.html
+183f0cb6a70047ce5d820ff7238fe1ec94ddf275cf8fa9c0e3d28d770bc7a2ba  index.html
+=== Recherches interdites ===
+167:        <p>Source locale ciblée : <code>source://local/tos-node-v1/prototype-test</code></p>
+176:          <div class="card"><span class="symbol">¬identité</span>Aucun nom réel, email, session, cookie ou identifiant utilisateur.</div>
+=== Validation fichiers ===
+-rw-r--r-- 1 ubuntu ubuntu 6630 May 15 17:13 index.html

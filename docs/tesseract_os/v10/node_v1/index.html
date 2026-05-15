@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ŧøß Node v1 — Source locale / NFC simulé</title>
+  <style>
+    :root {
+      --background: #0b0b0f;
+      --panel: #14141b;
+      --panel-soft: #191923;
+      --text: #f2f2f4;
+      --muted: #b6b6c2;
+      --accent: #ff335f;
+      --accent-soft: #2a1018;
+      --border: #30303b;
+      --ok: #95e6b8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--background);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      line-height: 1.6;
+    }
+
+    body {
+      margin: 0;
+      padding: 2rem;
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header,
+    main,
+    footer {
+      width: 100%;
+    }
+
+    header {
+      padding: 1.5rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      margin-bottom: 1.5rem;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      color: var(--accent);
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+
+    h2 {
+      font-size: 1.15rem;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+
+    p {
+      color: var(--muted);
+    }
+
+    code {
+      color: var(--ok);
+      background: #09090d;
+      border: 1px solid var(--border);
+      padding: 0.12rem 0.28rem;
+      border-radius: 0.2rem;
+      overflow-wrap: anywhere;
+    }
+
+    .status {
+      display: inline-block;
+      color: var(--text);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent);
+      padding: 0.35rem 0.6rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+    }
+
+    section,
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 1.2rem;
+      margin-bottom: 1rem;
+    }
+
+    .card {
+      background: var(--panel-soft);
+      margin-bottom: 0;
+    }
+
+    .symbol {
+      display: block;
+      color: var(--accent);
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .proof {
+      border-left: 4px solid var(--ok);
+    }
+
+    .warning {
+      border-left: 4px solid var(--accent);
+    }
+
+    ul {
+      margin: 0.25rem 0 0;
+      padding-left: 1.2rem;
+      color: var(--muted);
+    }
+
+    li + li {
+      margin-top: 0.25rem;
+    }
+
+    footer {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      border-top: 1px dashed var(--border);
+      padding-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .small {
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>ŧøß Node v1 — Source locale / NFC simulé</h1>
+      <p class="status">Prototype local, non transactionnel, non identitaire, réversible</p>
+      <p>Cette page présente une source locale fictive et les garde-fous du prototype. Elle est conçue pour être lue hors ligne comme un document statique.</p>
+    </header>
+
+    <main>
+      <section class="warning" aria-labelledby="simulation-nfc">
+        <h2 id="simulation-nfc">Geste NFC simulé</h2>
+        <p><strong>Cette page simule l’ouverture d’une source locale après un geste NFC. Aucun lecteur NFC réel n’est utilisé.</strong></p>
+        <p>Source locale ciblée : <code>source://local/tos-node-v1/prototype-test</code></p>
+        <p>Journal local validé, mentionné sans lecture automatique : <code>logs/sync_link_time.jsonl</code></p>
+      </section>
+
+      <section aria-labelledby="garde-fous">
+        <h2 id="garde-fous">Garde-fous visibles</h2>
+        <div class="grid">
+          <div class="card"><span class="symbol">¢ø</span>Aucune valeur monétaire, aucun prix, aucune promesse de rendement.</div>
+          <div class="card"><span class="symbol">¬monnaie</span>Aucun wallet, token, paiement, dépôt ou mécanisme financier.</div>
+          <div class="card"><span class="symbol">¬identité</span>Aucun nom réel, email, session, cookie ou identifiant utilisateur.</div>
+          <div class="card"><span class="symbol">¬pseudo-science</span>La page décrit une simulation symbolique, sans effet physique revendiqué.</div>
+          <div class="card"><span class="symbol">¬exécution_cachée</span>Aucune action invisible, aucun tracking, aucune lecture silencieuse.</div>
+          <div class="card"><span class="symbol">¬capture</span>Aucun CDN, aucune police distante, aucune image distante, aucun analytics.</div>
+          <div class="card"><span class="symbol">¬dépendance_runtime_externe</span>Aucune API externe requise pour ouvrir et comprendre cette page.</div>
+        </div>
+      </section>
+
+      <section aria-labelledby="cas-nfc">
+        <h2 id="cas-nfc">Cas NFC informatifs</h2>
+        <p>La lecture NFC locale est ici seulement représentée comme un geste d’accès à une source. Elle n’active aucune lecture matérielle, aucun paiement réel et aucune interaction avec un service distant.</p>
+        <ul>
+          <li>Lecture NFC locale simulée : autorisée comme explication textuelle.</li>
+          <li>Paiement réel : restreint, non activé, hors périmètre.</li>
+          <li>Connexion réseau : absente et non nécessaire.</li>
+        </ul>
+      </section>
+
+      <section class="proof" aria-labelledby="preuve-non-action">
+        <h2 id="preuve-non-action">Preuve de non-action</h2>
+        <p>Ce fichier ne contient aucune balise script, aucun formulaire, aucune ressource distante, aucune image externe, aucun stockage navigateur et aucun appel réseau. Il ne lit pas le journal local ; il l’indique uniquement comme référence documentaire.</p>
+      </section>
+
+      <section aria-labelledby="limites">
+        <h2 id="limites">Limites explicites</h2>
+        <p>Simulation locale ; aucun lecteur NFC réel ; aucun réseau ; aucune donnée personnelle ; aucune transaction ; aucune dépendance à Notion, Perplexity, NotebookLM, Drive ou Antigravity pendant l’ouverture de la page.</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>ŧøß Node v1 — phase 2 locale. Document statique autonome. Axiome de cadrage : <code>l’externe conseille ; le local demeure souverain</code>.</p>
+      <p class="small">Fichier attendu : <code>index.html</code>. Usage : consultation locale, audit humain direct, zéro exécution cachée.</p>
+    </footer>
+  </div>
+</body>
+</html>
