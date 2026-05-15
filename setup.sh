@@ -33,6 +33,13 @@ usermod -aG video $SUDO_USER || true
 usermod -aG audio $SUDO_USER || true
 usermod -aG render $SUDO_USER || true
 
+if id -nG "$SUDO_USER" | grep -qw "input" && id -nG "$SUDO_USER" | grep -qw "video"; then
+    echo "[ OK ] User $SUDO_USER successfully added to hardware groups."
+else
+    echo "[ FAIL ] Failed to add $SUDO_USER to hardware groups."
+    exit 1
+fi
+
 echo "[*] Checking for Rust toolchain..."
 if ! sudo -u $SUDO_USER command -v cargo &> /dev/null; then
     echo "[*] Installing Rust toolchain for $SUDO_USER..."
@@ -41,10 +48,24 @@ if ! sudo -u $SUDO_USER command -v cargo &> /dev/null; then
     source /home/$SUDO_USER/.cargo/env
 fi
 
+if ! sudo -u $SUDO_USER bash -c 'source $HOME/.cargo/env && command -v cargo' &> /dev/null; then
+    echo "[ FAIL ] Rust toolchain installation failed."
+    exit 1
+else
+    echo "[ OK ] Rust toolchain is available."
+fi
+
 echo "[*] Building Tesseract OS for Release..."
 # Navigate to the repo directory just in case
 cd "$(dirname "$0")"
 sudo -u $SUDO_USER bash -c 'source $HOME/.cargo/env && cargo build --release --all-features'
+
+if [ -f "./target/release/prismatic-os" ]; then
+    echo "[ OK ] Tesseract OS compiled successfully."
+else
+    echo "[ FAIL ] Tesseract OS compilation failed. Binary not found."
+    exit 1
+fi
 
 echo ""
 echo "========================================================"

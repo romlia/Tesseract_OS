@@ -54,9 +54,16 @@ EOF
 if command -v systemctl &> /dev/null; then
     systemctl daemon-reload || true
     systemctl enable tesseract.service || true
-    echo "Systemd daemon configured and enabled."
+    
+    if systemctl is-enabled tesseract.service &> /dev/null; then
+        echo "[ OK ] Systemd daemon configured and enabled."
+    else
+        echo "[ FAIL ] Failed to enable tesseract.service."
+        # Don't strictly exit 1 here, as chroot/docker systemctl might act up
+        # but log it clearly as a failure to enable.
+    fi
 else
-    echo "systemctl not found; skipping daemon reload."
+    echo "[!] systemctl not found; skipping daemon reload."
 fi
 
 echo "[4/4] Configuring Udev Optic Nerve Rules..."

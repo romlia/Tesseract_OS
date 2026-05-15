@@ -47,9 +47,17 @@ sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$WIFI_IP "echo '$ALPHA_PA
 echo "[*] Waiting for Umbilical Wire ($UMBILICAL_IP) to stabilize..."
 sleep 3
 if ping -c 1 -W 2 $UMBILICAL_IP > /dev/null 2>&1; then
-    echo "[*] Umbilical Wire is HOT. Severing Wi-Fi dependency."
+    echo "[ OK ] Umbilical Wire is HOT. Severing Wi-Fi dependency."
 else
-    echo "[!] Failed to reach Alpha node over the wire. Check physical connection."
+    echo "[ FAIL ] Failed to reach Alpha node over the wire. Check physical connection."
+    exit 1
+fi
+
+echo "[*] Verifying SSH connectivity over Umbilical Wire..."
+if sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 $ALPHA_USER@$UMBILICAL_IP "echo 'SSH is up'" > /dev/null 2>&1; then
+    echo "[ OK ] SSH access verified."
+else
+    echo "[ FAIL ] SSH connection refused or timed out on Umbilical wire."
     exit 1
 fi
 
@@ -82,6 +90,12 @@ sshpass -e ssh -o StrictHostKeyChecking=no $ALPHA_USER@$UMBILICAL_IP << EOF
 
     echo "[*] Activating Tesseract Daemon..."
     echo "$ALPHA_PASS" | sudo -S systemctl start tesseract
+
+    if systemctl is-active tesseract.service > /dev/null 2>&1; then
+        echo "[ OK ] Tesseract OS Daemon is active."
+    else
+        echo "[ FAIL ] Tesseract OS Daemon failed to start. Check journalctl."
+    fi
 
     echo "[*] Tesseract OS deployed and active."
 EOF

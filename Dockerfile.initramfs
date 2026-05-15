@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+FROM ubuntu:26.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install core build dependencies
+RUN apt-get update && apt-get install -y \
+    curl build-essential pkg-config libdrm-dev libgbm-dev libegl-dev \
+    vulkan-tools libvulkan-dev libasound2-dev libssl-dev libudev-dev libclang-dev udev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /app
+COPY . .
+WORKDIR /app/Tesseract_OS
+RUN cargo build --release
+
+# ---------------------------------------------------------
+# The minimal initramfs runtime (Zero-Overhead Environment)
+# ---------------------------------------------------------
+FROM ubuntu:26.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install only the absolute essential hardware drivers
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libdrm2 libgbm1 libegl1 libvulkan1 mesa-vulkan-drivers \
+    libasound2t64 udev kmod ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Setup standard minimal directory structure for initramfs
+RUN mkdir -p /proc /sys /dev /tmp /run /mnt
+
+# Copy ALSA configuration for pure hardware routing
+COPY Tesseract_OS/asound.conf /etc/asound.conf
+
+# Inject OS as the ultimate init system (PID 1)
+# When the custom kernel boots, it looks for /init or /sbin/init
+COPY --from=builder /app/Tesseract_OS/target/release/prismatic-os /init
+COPY --from=builder /app/Tesseract_OS/target/release/prismatic-os /sbin/init
+RUN chmod +x /init /sbin/init

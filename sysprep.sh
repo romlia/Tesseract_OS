@@ -63,6 +63,26 @@ EOF
 chmod +x /etc/tesseract/reification_boot.sh
 echo "Boot-loader armed."
 
+echo "[*] Verifying Sysprep artifacts..."
+MISSING=0
+for file in /etc/tesseract/identity/ed25519_frozen.lock \
+            /etc/tesseract/quantum_snapshot.bin \
+            /etc/tesseract/mesh/mesh_snapshot.json \
+            /opt/tesseract_genesis_image.tar.gz \
+            /etc/tesseract/reification_boot.sh; do
+    if [ ! -f "$file" ]; then
+        echo "[ FAIL ] Missing artifact: $file"
+        MISSING=1
+    fi
+done
+
+if [ "$MISSING" -eq 1 ]; then
+    echo "[ FAIL ] Sysprep verification failed."
+    exit 1
+else
+    echo "[ OK ] All Sysprep artifacts verified."
+fi
+
 echo "========================================================"
 echo "    Sysprep Complete."
 echo "    The node is ready for bare-metal imaging."
