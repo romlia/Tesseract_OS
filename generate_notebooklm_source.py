@@ -1,5 +1,6 @@
 import os
 import glob
+import subprocess
 
 # Files to export for NotebookLM
 # We target all the cryptic md files, the main documentation, and some core config.
@@ -24,7 +25,22 @@ def generate_export():
     files_to_export = list(set(files_to_export))
     if output_file in files_to_export:
         files_to_export.remove(output_file)
-        
+
+    # Filter to git-tracked files only — prevents accidentally exporting
+    # gitignored files (e.g. local secrets, scratch notes) that happen
+    # to match the glob patterns above.
+    # Use -z to avoid octal-escaping of non-ASCII filenames (e.g. ŧøß),
+    # which would otherwise break the set membership check against glob()
+    # results that come back in raw UTF-8.
+    tracked = set(
+        subprocess.run(
+            ['git', 'ls-files', '-z'],
+            capture_output=True, check=True
+        ).stdout.decode('utf-8').split('\0')
+    )
+    tracked.discard('')  # split leaves a trailing empty string
+    files_to_export = [f for f in files_to_export if f in tracked]
+
     # Sort files alphabetically for consistency
     files_to_export.sort()
     

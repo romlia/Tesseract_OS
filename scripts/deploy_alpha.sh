@@ -9,7 +9,7 @@ set -e
 WIFI_IP="10.0.0.2"
 UMBILICAL_IP="10.42.0.2"
 ALPHA_USER="jarvis"
-ALPHA_PASS="./enter@JARVIS5"
+ALPHA_PASS="${TESSERACT_SSH_PASS:?Define TESSERACT_SSH_PASS before running this script}"
 TARGET_DIR="/home/jarvis/tesseract-os"
 LOCAL_WORKSPACE="$(dirname $(dirname $(realpath $0)))"
 

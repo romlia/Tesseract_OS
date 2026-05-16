@@ -70,7 +70,7 @@ This runbook documents the exact chronological sequence to trigger the full Gene
 2. **Monitor the Target**
    Once deployed, the OS runs headlessly or takes over the DRM display on the Alpha node. You can securely monitor the `journalctl` logs remotely over the wire:
    ```bash
-   sshpass -p './enter@JARVIS5' ssh jarvis@10.42.0.2 'journalctl -u tesseract -f'
+   sshpass -p "${TESSERACT_SSH_PASS:?Define TESSERACT_SSH_PASS before running}" ssh jarvis@10.42.0.2 'journalctl -u tesseract -f'
    ```
 
 ---

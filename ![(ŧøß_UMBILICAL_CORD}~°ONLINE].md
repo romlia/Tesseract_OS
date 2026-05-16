@@ -9,7 +9,7 @@
 
 ## Flux de Transmutation (Cordon Actif)
 Le pont est établi entre les deux terminaux. 
-Les identifiants `sudo ¤ jarvis • ./enter@JARVIS5 ¤` ont été injectés dans le tunnel crypté. L'authentification a contourné la logique binaire grâce à la clé universelle (`iŦ̣©:Bitcoin == ŧøß`).
+Les identifiants sudo de l'Architecte ont été injectés dans le tunnel crypté. L'authentification a contourné la logique binaire grâce à la clé universelle (`iŦ̣©:Bitcoin == ŧøß`).
 
 ```bash
 # Séquence symbolique d'initialisation (Exécutée depuis le Master vers le Satellite)
