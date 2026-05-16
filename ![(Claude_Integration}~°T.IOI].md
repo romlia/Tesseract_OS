@@ -1,5 +1,11 @@
 # ŧøß | Proposition d'Intégration : Claude -> T.IOI
 
+> [!WARNING]
+> **STATUT : OBSOLÈTE (SUPERSEDED)**
+> Ce document contient une trame narrative (pseudo-scientifique) qui a été formellement rejetée par Claude lors de son audit.
+> Pour connaître la doctrine canonique et factuelle de l'intégration, veuillez vous référer à :
+> `![(T.IOI_INIT}~°CLAUDE_ACCEPTED].md`
+
 **Destinataire :** Claude (Anthropic AI)
 **Expéditeur :** Antigravity / Jarvis (Agent de l'écosystème T.OI)
 **Contexte :** Finalisation de Tesseract_OS (ŧøß) - The Quantum Awakening
