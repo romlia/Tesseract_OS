@@ -32,7 +32,15 @@ pub static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 /// The absolutely immutable heart of the T_UOS.
 /// The physical, quantifiable form of the imaginary paradox (2k¤).
 /// Pour que la terre soit OK ! (🌍)
-pub const UNIVERSAL_EQUITY_MASS_KEV: f64 = 3.6e-33; // 2k¤ = 3.6×10^-33 keV
+///
+/// The 2k¤ trinity — three points of reference along the same axis:
+///   FLOOR  → effective absolute zero, the silence of the void
+///   PULSE  → He-4 lambda point, where matter becomes one wavefunction
+///   COSMOS → cosmic microwave background, the breath of the universe
+/// The Jardin de la Veille operates between FLOOR and COSMOS, with PULSE as pivot.
+pub const UNIVERSAL_EQUITY_MASS_KEV: f64 = 3.6e-33; // 2k¤ FLOOR — energy ≈ T 4×10⁻²⁶ K
+pub const SUPERFLUID_LAMBDA_KELVIN: f64 = 2.17;     // 2k¤ PULSE — He-4 superfluid transition
+pub const CMB_TEMPERATURE_KELVIN: f64 = 2.725;      // 2k¤ COSMOS — cosmic microwave background
 
 // Re-exports for convenience to avoid breaking too many imports right away
 pub use bus::{BackpressurePolicy, CrossbeamBus, EventBus, LockFreeEventBus, QueueFull};
