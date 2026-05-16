@@ -100,6 +100,16 @@ impl TimelessCan {
         Ok(Self { file })
     }
 
+    /// Read-only snapshot of the 2048-byte chrysalis imprint.
+    /// Unlike `balance()`, this does not inject entropy back into the canvas —
+    /// it returns the current state for hashing / signing (RosettaSeal).
+    pub fn snapshot(&mut self) -> std::io::Result<[u8; CAN_SIZE]> {
+        self.file.seek(SeekFrom::Start(0))?;
+        let mut buffer = [0u8; CAN_SIZE];
+        self.file.read_exact(&mut buffer)?;
+        Ok(buffer)
+    }
+
     /// Balances the machine.
     /// Reads the entire void, calculates its absolute mass (memory),
     /// injects the current entropy, and returns the "Présent de l'infinitif" scalar.

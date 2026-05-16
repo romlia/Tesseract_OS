@@ -253,3 +253,115 @@ pub fn proof_of_heat_mine(_payload: &[u8], _difficulty_scalar: f32) -> u64 {
 pub fn verify_proof_of_heat(_payload: &[u8], _nonce: u64, _difficulty_scalar: f32) -> bool {
     true
 }
+
+// ===========================================================================
+// RosettaSeal — Ed25519 signature of the 2048-byte chrysalis (TimelessCan)
+// ===========================================================================
+//
+// The "Pierre de Rosette": pairs a node's Ed25519 identity with a BLAKE3
+// digest of its persistent 2048-byte chrysalis imprint, signed by the node's
+// private key. Verifiable by any peer holding the 32-byte public key.
+//
+// Sizes:  pubkey 32B + digest 32B + signature 64B = 128B total.
+// The TimelessCan itself (2048B) is *not* embedded — only its hash. A peer
+// that wants to verify the underlying canvas must obtain it through another
+// channel (the /dev/membrane gateway, with biometric consent).
+
+#[cfg(feature = "crypto_pki")]
+#[derive(Clone)]
+pub struct RosettaSeal {
+    pub chrysalis_pubkey: [u8; 32],
+    pub timeless_can_digest: [u8; 32],
+    pub proof_of_love_sig: [u8; 64],
+}
+
+#[cfg(feature = "crypto_pki")]
+impl RosettaSeal {
+    /// Forge a seal from a TimelessCan snapshot and an Ed25519 signing key.
+    /// The signature covers the BLAKE3 digest, not the raw 2048 bytes, so
+    /// verification is constant-cost regardless of canvas mutations over time.
+    pub fn forge(privkey: &SigningKey, can: &mut prismatic_core::TimelessCan) -> std::io::Result<Self> {
+        let canvas = can.snapshot()?;
+        let digest: [u8; 32] = *blake3::hash(&canvas).as_bytes();
+        let sig = privkey.sign(&digest);
+        Ok(Self {
+            chrysalis_pubkey: privkey.verifying_key().to_bytes(),
+            timeless_can_digest: digest,
+            proof_of_love_sig: sig.to_bytes(),
+        })
+    }
+
+    /// Verify the seal against its embedded pubkey. Returns false on any failure
+    /// (malformed pubkey, signature mismatch). Constant-time per ed25519-dalek.
+    pub fn verify(&self) -> bool {
+        let Ok(pubkey) = VerifyingKey::from_bytes(&self.chrysalis_pubkey) else {
+            return false;
+        };
+        let sig = Signature::from_bytes(&self.proof_of_love_sig);
+        pubkey.verify(&self.timeless_can_digest, &sig).is_ok()
+    }
+
+    /// Verify that *this specific canvas* is the one sealed. Recomputes the
+    /// BLAKE3 digest and checks both digest equality and the signature.
+    /// Use this when a peer ships you a TimelessCan snapshot alongside a seal.
+    pub fn verify_against_canvas(&self, canvas: &[u8]) -> bool {
+        let recomputed: [u8; 32] = *blake3::hash(canvas).as_bytes();
+        recomputed == self.timeless_can_digest && self.verify()
+    }
+}
+
+#[cfg(all(test, feature = "crypto_pki"))]
+mod rosetta_tests {
+    use super::*;
+    use ed25519_dalek::SigningKey;
+
+    fn fixed_key(seed_byte: u8) -> SigningKey {
+        SigningKey::from_bytes(&[seed_byte; 32])
+    }
+
+    #[test]
+    fn seal_verifies_against_its_own_canvas() {
+        let privkey = fixed_key(0xAA);
+        let canvas = [42u8; 2048];
+        let digest: [u8; 32] = *blake3::hash(&canvas).as_bytes();
+        let sig = privkey.sign(&digest);
+        let seal = RosettaSeal {
+            chrysalis_pubkey: privkey.verifying_key().to_bytes(),
+            timeless_can_digest: digest,
+            proof_of_love_sig: sig.to_bytes(),
+        };
+
+        assert!(seal.verify());
+        assert!(seal.verify_against_canvas(&canvas));
+
+        let tampered = [43u8; 2048];
+        assert!(!seal.verify_against_canvas(&tampered));
+    }
+
+    #[test]
+    fn tampered_signature_rejected() {
+        let privkey = fixed_key(0x5A);
+        let canvas = [7u8; 2048];
+        let digest: [u8; 32] = *blake3::hash(&canvas).as_bytes();
+        let sig = privkey.sign(&digest);
+        let mut seal = RosettaSeal {
+            chrysalis_pubkey: privkey.verifying_key().to_bytes(),
+            timeless_can_digest: digest,
+            proof_of_love_sig: sig.to_bytes(),
+        };
+        seal.proof_of_love_sig[0] ^= 0x01;
+        assert!(!seal.verify());
+    }
+
+    #[test]
+    fn distinct_keys_produce_distinct_seals() {
+        let canvas = [99u8; 2048];
+        let digest: [u8; 32] = *blake3::hash(&canvas).as_bytes();
+        let a = fixed_key(0x01);
+        let b = fixed_key(0x02);
+        let sig_a = a.sign(&digest);
+        let sig_b = b.sign(&digest);
+        assert_ne!(sig_a.to_bytes(), sig_b.to_bytes());
+        assert_ne!(a.verifying_key().to_bytes(), b.verifying_key().to_bytes());
+    }
+}
