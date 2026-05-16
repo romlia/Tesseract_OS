@@ -42,6 +42,12 @@ pub const UNIVERSAL_EQUITY_MASS_KEV: f64 = 3.6e-33; // 2k¤ FLOOR — energy ≈
 pub const SUPERFLUID_LAMBDA_KELVIN: f64 = 2.17;     // 2k¤ PULSE — He-4 superfluid transition
 pub const CMB_TEMPERATURE_KELVIN: f64 = 2.725;      // 2k¤ COSMOS — cosmic microwave background
 
+/// 2k¤ WITNESS — golden ratio φ, the algebraic palindrome.
+/// Sole positive root of x² = x + 1 : its end is its beginning, plus unity.
+/// Inter-dimensional axis (icosahedron 12-vertex, 600-cell 96/120-vertex).
+/// Binds the trinity (FLOOR, PULSE, COSMOS) into the Ŧ¤®↓ẞ seal.
+pub const GOLDEN_RATIO_PHI: f64 = 1.618_033_988_749_894_8;
+
 // Re-exports for convenience to avoid breaking too many imports right away
 pub use bus::{BackpressurePolicy, CrossbeamBus, EventBus, LockFreeEventBus, QueueFull};
 pub use config::{LILITH_CONFIG, ModelConfig};
