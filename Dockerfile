@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libudev-dev \
     libclang-dev \
+    libseat-dev \
     udev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -50,6 +51,7 @@ RUN apt-get update && apt-get install -y \
     pulseaudio-utils \
     udev \
     libssl3 \
+    libseat1 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
