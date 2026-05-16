@@ -11,13 +11,28 @@ pub fn run_bare_metal(
 ) {
     tracing::info!("Initializing Bare-Metal DRM/KMS Fallback Framebuffer...");
 
-    // 1. Initialize Headless WebGPU via HolographicManifold
-    let manifold =
-        pollster::block_on(prismatic_glass::drm_matrix::HolographicManifold::ignite_bare_metal())
-            .unwrap_or_else(|e| {
-                let _ = std::fs::write("WGPU_CRASH.log", format!("{:?}", e));
-                panic!("Failed to ignite bare metal DRM: {:?}", e);
-            });
+    // 1. Initialize Headless WebGPU via HolographicManifold.
+    // Any DRM init failure (EACCES from a held master, EBUSY, the
+    // downstream "no active display mode found" that masks EBUSY,
+    // etc.) falls back to headless instead of panicking — bare-metal
+    // is best effort, the host may be running a compositor.
+    let manifold = match pollster::block_on(
+        prismatic_glass::drm_matrix::HolographicManifold::ignite_bare_metal(),
+    ) {
+        Ok(m) => m,
+        Err(e) => {
+            let msg = format!("{:?}", e);
+            let _ = std::fs::write("WGPU_CRASH.log", msg.clone());
+            tracing::warn!(
+                "DRM init failed ({}). Bare-metal requires a free TTY \
+                 (Ctrl+Alt+F3, display manager stopped). \
+                 Falling back to headless for this session.",
+                msg.lines().next().unwrap_or("unknown error")
+            );
+            crate::headless::run_headless(state, bus);
+            return;
+        }
+    };
     let device = manifold.device;
     let queue = manifold.queue;
     let _adapter = manifold.adapter;
